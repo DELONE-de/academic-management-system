@@ -1,0 +1,225 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum UserRole {
+  HOD
+  DEAN
+}
+
+enum Semester {
+  FIRST
+  SECOND
+}
+
+enum Level {
+  ND1
+  ND2
+  HND1
+  HND2
+  LEVEL_100
+  LEVEL_200
+  LEVEL_300
+  LEVEL_400
+  LEVEL_500
+}
+
+enum Grade {
+  A
+  B
+  C
+  D
+  E
+  F
+}
+
+// ============================================
+// MODELS
+// ============================================
+
+/// Faculty model - represents a faculty in the university
+model Faculty {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  code        String       @unique
+  description String?
+  
+  // Relations
+  departments Department[]
+  users       User[]       @relation("FacultyDean")
+  
+  // Timestamps
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@map("faculties")
+}
+
+/// Department model - represents a department within a faculty
+model Department {
+  id          String   @id @default(cuid())
+  name        String
+  code        String   @unique
+  description String?
+  passMark    Int      @default(40) // Varies per department
+  
+  // Relations
+  facultyId   String
+  faculty     Faculty  @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  students    Student[]
+  courses     Course[]
+  users       User[]   @relation("DepartmentHOD")
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([name, facultyId])
+  @@map("departments")
+}
+
+/// User model - represents HOD or DEAN
+model User {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  password     String
+  firstName    String
+  lastName     String
+  role         UserRole
+  isActive     Boolean     @default(true)
+  
+  // Conditional relations based on role
+  departmentId String?
+  department   Department? @relation("DepartmentHOD", fields: [departmentId], references: [id], onDelete: SetNull)
+  
+  facultyId    String?
+  faculty      Faculty?    @relation("FacultyDean", fields: [facultyId], references: [id], onDelete: SetNull)
+  
+  // Timestamps
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  lastLogin    DateTime?
+
+  @@map("users")
+}
+
+/// Student model - represents a student in a department
+model Student {
+  id              String    @id @default(cuid())
+  matricNumber    String    @unique
+  firstName       String
+  lastName        String
+  middleName      String?
+  email           String?   @unique
+  phone           String?
+  currentLevel    Level
+  admissionYear   Int
+  isActive        Boolean   @default(true)
+  
+  // Relations
+  departmentId    String
+  department      Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  results         Result[]
+  semesterGpas    SemesterGPA[]
+  
+  // Timestamps
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([departmentId, currentLevel])
+  @@map("students")
+}
+
+/// Course model - represents a course offered in a department
+model Course {
+  id           String     @id @default(cuid())
+  code         String
+  title        String
+  unit         Int        // Credit units (1-6 typically)
+  level        Level
+  semester     Semester
+  isElective   Boolean    @default(false)
+  description  String?
+  
+  // Relations
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  results      Result[]
+  
+  // Timestamps
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([code, departmentId])
+  @@index([departmentId, level, semester])
+  @@map("courses")
+}
+
+/// Result model - stores individual course results for students
+model Result {
+  id           String     @id @default(cuid())
+  score        Float      // Raw score (0-100)
+  grade        Grade      // Calculated grade
+  gradePoint   Int        // Points (0-5)
+  pxu          Float      // Point × Unit
+  isCarryOver  Boolean    @default(false) // True if score < passMark
+  
+  // Academic period
+  level        Level
+  semester     Semester
+  academicYear String     // e.g., "2023/2024"
+  
+  // Relations
+  studentId    String
+  student      Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId     String
+  course       Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  
+  // Timestamps
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([studentId, courseId, academicYear])
+  @@index([studentId, level, semester])
+  @@map("results")
+}
+
+/// SemesterGPA model - stores GPA for historical reference
+model SemesterGPA {
+  id           String     @id @default(cuid())
+  gpa          Float      // Semester GPA (0.00 - 5.00)
+  totalUnits   Int        // Total credit units for semester
+  totalPoints  Float      // Total quality points
+  
+  // Academic period
+  level        Level
+  semester     Semester
+  academicYear String     // e.g., "2023/2024"
+  
+  // Cumulative calculations (for CGPA tracking)
+  cumulativeGpa   Float?     // CGPA up to this point
+  cumulativeUnits Int?       // Total units up to this point
+  
+  // Relations
+  studentId    String
+  student      Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  
+  // Timestamps
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([studentId, level, semester, academicYear])
+  @@index([studentId])
+  @@map("semester_gpas")
+}
