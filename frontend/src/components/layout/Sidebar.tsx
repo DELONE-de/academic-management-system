@@ -41,7 +41,7 @@ export function Sidebar() {
   const navItems = user?.role === 'HOD' ? hodNavItems : deanNavItems;
 
   return (
-    <aside className="w-64 bg-gray-900 min-h-screen p-4">
+    <aside className="w-64 bg-gray-900 min-h-screen p-4 flex flex-col">
       <div className="mb-8">
         <Link href="/dashboard" className="flex items-center gap-2">
           <AcademicCapIcon className="h-8 w-8 text-primary-400" />
@@ -49,7 +49,7 @@ export function Sidebar() {
         </Link>
       </div>
 
-      <nav className="space-y-1">
+      <nav className="space-y-1 flex-1">
         {navItems.map((item) => {
           const isActive = pathname === item.href;
           return (
@@ -70,7 +70,7 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="absolute bottom-4 left-4 right-4">
+      <div className="mt-4">
         <div className="bg-gray-800 rounded-lg p-4">
           <p className="text-xs text-gray-400">Logged in as</p>
           <p className="text-sm font-medium text-white">

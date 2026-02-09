@@ -23,7 +23,7 @@ const studentSchema = z.object({
   email: z.string().email('Invalid email').optional().or(z.literal('')),
   phone: z.string().optional(),
   currentLevel: z.string().min(1, 'Level is required'),
-  admissionYear: z.coerce.number().min(1990).max(new Date().getFullYear()),
+  admissionYear: z.number().int().min(1990).max(new Date().getFullYear()),
 });
 
 type StudentFormData = z.infer<typeof studentSchema>;
@@ -119,7 +119,7 @@ export function StudentForm({ student, onSubmit, onCancel, isLoading }: StudentF
           min={1990}
           max={new Date().getFullYear()}
           error={errors.admissionYear?.message}
-          {...register('admissionYear')}
+          {...register('admissionYear', { valueAsNumber: true })}
           required
         />
       </div>

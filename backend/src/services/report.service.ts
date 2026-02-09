@@ -85,12 +85,18 @@ export class ReportService {
             firstName: true,
             lastName: true,
           },
-          include: {
-            semesterGpas: true,
-          },
         },
       },
       orderBy: { gpa: 'desc' },
+    });
+
+    // Get all semester GPAs for CGPA calculation
+    const studentIds = semesterGpas.map(g => g.studentId);
+    const allStudentGpas = await prisma.semesterGPA.findMany({
+      where: {
+        studentId: { in: studentIds },
+      },
+      orderBy: [{ level: 'asc' }, { semester: 'asc' }],
     });
 
     // Group results by student
@@ -112,9 +118,9 @@ export class ReportService {
       const studentResultData = studentResultsMap.get(studentId) || [];
 
       // Calculate CGPA from all semesters
-      const allGpas = gpa.student.semesterGpas;
+      const studentGpas = allStudentGpas.filter(g => g.studentId === studentId);
       const cgpaData = calculateCGPA(
-        allGpas.map((g) => ({
+        studentGpas.map((g) => ({
           gpa: g.gpa,
           totalUnits: g.totalUnits,
           totalPoints: g.totalPoints,

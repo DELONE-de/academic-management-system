@@ -52,10 +52,14 @@ export default function StudentsPage() {
   const handleCreate = async (data: any) => {
     setIsSubmitting(true);
     try {
-      const response = await studentsApi.create({
+      const payload = {
         ...data,
         departmentId: user?.departmentId,
-      });
+        email: data.email || undefined,
+        phone: data.phone || undefined,
+        middleName: data.middleName || undefined,
+      };
+      const response = await studentsApi.create(payload);
       if (response.success) {
         toast.success('Student created successfully');
         setIsModalOpen(false);

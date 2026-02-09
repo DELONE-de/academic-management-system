@@ -98,6 +98,13 @@ export default function CoursesPage() {
     }
   };
 
+  const handleFormSubmit = (data: any) => {
+    if (editingCourse) {
+      return handleUpdate(data);
+    }
+    return handleCreate(data);
+  };
+
   const columns = [
     {
       key: 'code',
