@@ -10,7 +10,6 @@ export const scoreEntrySchema = z.object({
 
 export const bulkScoreEntrySchema = z.object({
   level: z.enum([
-    'ND1', 'ND2', 'HND1', 'HND2',
     'LEVEL_100', 'LEVEL_200', 'LEVEL_300', 'LEVEL_400', 'LEVEL_500'
   ]),
   semester: z.enum(['FIRST', 'SECOND']),

@@ -23,16 +23,22 @@ export class ResultService {
       throw new AppError('Department not found', 404);
     }
 
+    // Get all courses in one query
+    const courseIds = [...new Set(scores.map(s => s.courseId))];
+    const courses = await prisma.course.findMany({
+      where: { id: { in: courseIds } },
+      select: { id: true, unit: true, departmentId: true, code: true, title: true },
+    });
+
+    const courseMap = new Map(courses.map(c => [c.id, c]));
+
     const results: any[] = [];
     const errors: any[] = [];
 
+    // Process scores in batches
     for (const scoreEntry of scores) {
       try {
-        // Get course unit
-        const course = await prisma.course.findUnique({
-          where: { id: scoreEntry.courseId },
-          select: { unit: true, departmentId: true },
-        });
+        const course = courseMap.get(scoreEntry.courseId);
 
         if (!course) {
           errors.push({
@@ -88,14 +94,6 @@ export class ResultService {
             pxu: calculation.pxu,
             isCarryOver: calculation.isCarryOver,
           },
-          include: {
-            student: {
-              select: { matricNumber: true, firstName: true, lastName: true },
-            },
-            course: {
-              select: { code: true, title: true, unit: true },
-            },
-          },
         });
 
         results.push(result);
@@ -108,10 +106,24 @@ export class ResultService {
       }
     }
 
+    // Fetch student and course details for results
+    const studentIds = [...new Set(results.map(r => r.studentId))];
+    const students = await prisma.student.findMany({
+      where: { id: { in: studentIds } },
+      select: { id: true, matricNumber: true, firstName: true, lastName: true },
+    });
+    const studentMap = new Map(students.map(s => [s.id, s]));
+
+    const enrichedResults = results.map(r => ({
+      ...r,
+      student: studentMap.get(r.studentId),
+      course: courseMap.get(r.courseId),
+    }));
+
     return {
       successCount: results.length,
       errorCount: errors.length,
-      results,
+      results: enrichedResults,
       errors,
     };
   }

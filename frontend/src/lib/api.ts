@@ -3,7 +3,7 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { ApiResponse } from '@/types';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 // Create axios instance
 const api: AxiosInstance = axios.create({
@@ -11,7 +11,7 @@ const api: AxiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 30000,
+  timeout: 120000,
 });
 
 // Request interceptor to add auth token

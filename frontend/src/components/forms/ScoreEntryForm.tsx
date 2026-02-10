@@ -116,9 +116,14 @@ export function ScoreEntryForm({ departmentId }: ScoreEntryFormProps) {
         });
 
         toast.success('GPAs calculated successfully');
+        
+        // Reset scores after successful submission
+        setScores({});
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to enter scores');
+      console.error('Score entry error:', error);
+      const errorMsg = error.response?.data?.message || error.response?.data?.error || error.message || 'Failed to enter scores';
+      toast.error(errorMsg);
     } finally {
       setIsLoading(false);
     }
