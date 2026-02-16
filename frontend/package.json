@@ -11,22 +11,27 @@
   "dependencies": {
     "@headlessui/react": "^1.7.17",
     "@heroicons/react": "^2.1.1",
+    "@hookform/resolvers": "^3.3.2",
     "axios": "^1.6.2",
     "chart.js": "^4.4.1",
     "next": "14.0.4",
     "react": "^18.2.0",
     "react-chartjs-2": "^5.2.0",
     "react-dom": "^18.2.0",
-    "react-hot-toast": "^2.4.1",
     "react-hook-form": "^7.49.2",
-    "zod": "^3.22.4",
-    "@hookform/resolvers": "^3.3.2"
+    "react-hot-toast": "^2.4.1",
+    "zod": "^3.22.4"
+  },
+  "optionalDependencies": {
+    "@next/swc-android-arm64": "npm:null@^14.0.4"
   },
   "devDependencies": {
+    "@babel/core": "^7.29.0",
     "@types/node": "^20.10.5",
     "@types/react": "^18.2.45",
     "@types/react-dom": "^18.2.18",
     "autoprefixer": "^10.4.16",
+    "babel-loader": "^10.0.0",
     "eslint": "^8.56.0",
     "eslint-config-next": "14.0.4",
     "postcss": "^8.4.32",

@@ -1,346 +1,259 @@
-// src/lib/api.ts
+// FILE: frontend/src/lib/api.ts
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
-import { ApiResponse } from '@/types';
+import { 
+  ApiResponse, 
+  BulkUploadResult, 
+  AddScoreInput, 
+  AddScoreResult, 
+  DeleteScoreResult,
+  StudentWithGPA,
+  SemesterGPA,
+  Student,
+  Course,
+  Result
+} from '@/types';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
-// Create axios instance
 const api: AxiosInstance = axios.create({
   baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  timeout: 120000,
+  headers: { 'Content-Type': 'application/json' },
+  timeout: 60000, // Increased for bulk uploads
 });
 
-// Request interceptor to add auth token
-api.interceptors.request.use(
-  (config) => {
-    if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('token');
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
+api.interceptors.request.use((config) => {
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('token');
+    if (token) config.headers.Authorization = `Bearer ${token}`;
   }
-);
+  return config;
+});
 
-// Response interceptor to handle errors
 api.interceptors.response.use(
   (response) => response,
   (error: AxiosError<ApiResponse>) => {
-    if (error.response?.status === 401) {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        window.location.href = '/login';
-      }
+    if (error.response?.status === 401 && typeof window !== 'undefined') {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
     }
     return Promise.reject(error);
   }
 );
 
-// ======================
-// AUTH API
-// ======================
-
+// Auth API
 export const authApi = {
   login: async (email: string, password: string) => {
     const response = await api.post<ApiResponse>('/auth/login', { email, password });
     return response.data;
   },
-
   getProfile: async () => {
     const response = await api.get<ApiResponse>('/auth/profile');
     return response.data;
   },
-
-  changePassword: async (currentPassword: string, newPassword: string) => {
-    const response = await api.post<ApiResponse>('/auth/change-password', {
-      currentPassword,
-      newPassword,
-    });
-    return response.data;
-  },
 };
 
-// ======================
-// STUDENTS API
-// ======================
-
+// Students API
 export const studentsApi = {
-  getAll: async (params?: {
-    departmentId?: string;
-    level?: string;
-    page?: number;
-    limit?: number;
-    search?: string;
-  }) => {
-    const response = await api.get<ApiResponse>('/students', { params });
+  getAll: async (params?: any) => {
+    const response = await api.get<ApiResponse<Student[]>>('/students', { params });
     return response.data;
   },
-
   getById: async (id: string) => {
-    const response = await api.get<ApiResponse>(`/students/${id}`);
+    const response = await api.get<ApiResponse<Student>>(`/students/${id}`);
     return response.data;
   },
-
   create: async (data: any) => {
-    const response = await api.post<ApiResponse>('/students', data);
+    const response = await api.post<ApiResponse<Student>>('/students', data);
     return response.data;
   },
-
   update: async (id: string, data: any) => {
-    const response = await api.put<ApiResponse>(`/students/${id}`, data);
+    const response = await api.put<ApiResponse<Student>>(`/students/${id}`, data);
     return response.data;
   },
-
   delete: async (id: string) => {
     const response = await api.delete<ApiResponse>(`/students/${id}`);
     return response.data;
   },
-
   getByDepartmentLevel: async (departmentId: string, level: string) => {
-    const response = await api.get<ApiResponse>(
-      `/students/department/${departmentId}/level/${level}`
-    );
+    const response = await api.get<ApiResponse<Student[]>>(`/students/department/${departmentId}/level/${level}`);
+    return response.data;
+  },
+  
+  // Bulk Upload
+  bulkUpload: async (file: File): Promise<ApiResponse<BulkUploadResult> | Blob> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const response = await api.post('/students/bulk-upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      responseType: 'arraybuffer',
+    });
+    
+    // Check if response is error Excel file
+    const contentType = response.headers['content-type'];
+    if (contentType?.includes('spreadsheet')) {
+      return new Blob([response.data], { type: contentType });
+    }
+    
+    // Parse JSON response
+    const text = new TextDecoder().decode(response.data);
+    return JSON.parse(text) as ApiResponse<BulkUploadResult>;
+  },
+  
+  downloadTemplate: async (): Promise<Blob> => {
+    const response = await api.get('/students/bulk-upload/template', { responseType: 'blob' });
     return response.data;
   },
 };
 
-// ======================
-// COURSES API
-// ======================
-
+// Courses API
 export const coursesApi = {
-  getAll: async (params?: {
-    departmentId?: string;
-    level?: string;
-    semester?: string;
-    search?: string;
-  }) => {
-    const response = await api.get<ApiResponse>('/courses', { params });
+  getAll: async (params?: any) => {
+    const response = await api.get<ApiResponse<Course[]>>('/courses', { params });
     return response.data;
   },
-
-  getByDepartmentLevelSemester: async (
-    departmentId: string,
-    level: string,
-    semester: string
-  ) => {
-    const response = await api.get<ApiResponse>(
-      `/courses/department/${departmentId}/level/${level}/semester/${semester}`
-    );
+  getByDepartmentLevelSemester: async (departmentId: string, level: string, semester: string) => {
+    const response = await api.get<ApiResponse<Course[]>>(`/courses/department/${departmentId}/level/${level}/semester/${semester}`);
     return response.data;
   },
-
-  getById: async (id: string) => {
-    const response = await api.get<ApiResponse>(`/courses/${id}`);
-    return response.data;
-  },
-
   create: async (data: any) => {
-    const response = await api.post<ApiResponse>('/courses', data);
+    const response = await api.post<ApiResponse<Course>>('/courses', data);
     return response.data;
   },
-
   update: async (id: string, data: any) => {
-    const response = await api.put<ApiResponse>(`/courses/${id}`, data);
+    const response = await api.put<ApiResponse<Course>>(`/courses/${id}`, data);
     return response.data;
   },
-
   delete: async (id: string) => {
     const response = await api.delete<ApiResponse>(`/courses/${id}`);
     return response.data;
   },
 };
 
-// ======================
-// RESULTS API
-// ======================
-
+// Results API
 export const resultsApi = {
   enterScores: async (data: any) => {
     const response = await api.post<ApiResponse>('/results/scores', data);
     return response.data;
   },
-
-  getStudentResults: async (
-    studentId: string,
-    params?: { level?: string; semester?: string; academicYear?: string }
-  ) => {
-    const response = await api.get<ApiResponse>(`/results/student/${studentId}`, {
-      params,
-    });
+  
+  getStudentResults: async (studentId: string, params?: any) => {
+    const response = await api.get<ApiResponse<Result[]>>(`/results/student/${studentId}`, { params });
     return response.data;
   },
-
-  getDepartmentResults: async (
-    departmentId: string,
-    params: { level: string; semester: string; academicYear: string }
-  ) => {
-    const response = await api.get<ApiResponse>(`/results/department/${departmentId}`, {
-      params,
-    });
+  
+  getStudentResultsWithGPA: async (studentId: string) => {
+    const response = await api.get<ApiResponse<StudentWithGPA>>(`/results/student/${studentId}/with-gpa`);
     return response.data;
   },
-
-  updateResult: async (id: string, score: number) => {
-    const response = await api.put<ApiResponse>(`/results/${id}`, { score });
+  
+  getDepartmentResults: async (departmentId: string, params: any) => {
+    const response = await api.get<ApiResponse<Result[]>>(`/results/department/${departmentId}`, { params });
     return response.data;
   },
-
-  deleteResult: async (id: string) => {
-    const response = await api.delete<ApiResponse>(`/results/${id}`);
-    return response.data;
-  },
-
+  
   getCarryOvers: async (studentId: string) => {
-    const response = await api.get<ApiResponse>(`/results/carryovers/${studentId}`);
+    const response = await api.get<ApiResponse<Result[]>>(`/results/carryovers/${studentId}`);
+    return response.data;
+  },
+  
+  // Add single score
+  addScore: async (data: AddScoreInput): Promise<ApiResponse<AddScoreResult>> => {
+    const response = await api.post<ApiResponse<AddScoreResult>>('/results/add', data);
+    return response.data;
+  },
+  
+  // Delete single score
+  deleteScore: async (resultId: string): Promise<ApiResponse<DeleteScoreResult>> => {
+    const response = await api.delete<ApiResponse<DeleteScoreResult>>(`/results/delete/${resultId}`);
+    return response.data;
+  },
+  
+  // Update score
+  updateScore: async (resultId: string, score: number) => {
+    const response = await api.put<ApiResponse<Result>>(`/results/${resultId}`, { score });
+    return response.data;
+  },
+  
+  // Bulk Upload
+  bulkUpload: async (file: File): Promise<ApiResponse<BulkUploadResult> | Blob> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const response = await api.post('/results/bulk-upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      responseType: 'arraybuffer',
+    });
+    
+    const contentType = response.headers['content-type'];
+    if (contentType?.includes('spreadsheet')) {
+      return new Blob([response.data], { type: contentType });
+    }
+    
+    const text = new TextDecoder().decode(response.data);
+    return JSON.parse(text) as ApiResponse<BulkUploadResult>;
+  },
+  
+  downloadTemplate: async (): Promise<Blob> => {
+    const response = await api.get('/results/bulk-upload/template', { responseType: 'blob' });
     return response.data;
   },
 };
 
-// ======================
 // GPA API
-// ======================
-
 export const gpaApi = {
-  calculateSemesterGPA: async (data: {
-    studentId: string;
-    level: string;
-    semester: string;
-    academicYear: string;
-  }) => {
+  calculateSemesterGPA: async (data: any) => {
     const response = await api.post<ApiResponse>('/gpa/calculate', data);
     return response.data;
   },
-
-  getSemesterGPA: async (
-    studentId: string,
-    params: { level: string; semester: string; academicYear: string }
-  ) => {
-    const response = await api.get<ApiResponse>(`/gpa/student/${studentId}`, { params });
-    return response.data;
-  },
-
+  
   getStudentGPAHistory: async (studentId: string) => {
     const response = await api.get<ApiResponse>(`/gpa/student/${studentId}/history`);
     return response.data;
   },
-
-  calculateDepartmentGPAs: async (data: {
-    departmentId?: string;
-    level: string;
-    semester: string;
-    academicYear: string;
-  }) => {
+  
+  getSemesterGPA: async (studentId: string, params: any) => {
+    const response = await api.get<ApiResponse<SemesterGPA>>(`/gpa/student/${studentId}`, { params });
+    return response.data;
+  },
+  
+  calculateDepartmentGPAs: async (data: any) => {
     const response = await api.post<ApiResponse>('/gpa/calculate-department', data);
     return response.data;
   },
-
-  getDepartmentStats: async (
-    departmentId: string,
-    params?: { level?: string; semester?: string; academicYear?: string }
-  ) => {
-    const response = await api.get<ApiResponse>(`/gpa/department/${departmentId}/stats`, {
-      params,
-    });
+  
+  getDepartmentStats: async (departmentId: string, params?: any) => {
+    const response = await api.get<ApiResponse>(`/gpa/department/${departmentId}/stats`, { params });
     return response.data;
   },
 };
 
-// ======================
-// REPORTS API
-// ======================
-
-export const reportsApi = {
-  getDepartmentReport: async (
-    departmentId: string,
-    params: { level: string; semester: string; academicYear: string }
-  ) => {
-    const response = await api.get<ApiResponse>(`/reports/department/${departmentId}`, {
-      params,
-    });
-    return response.data;
-  },
-
-  downloadDepartmentReportPDF: async (
-    departmentId: string,
-    params: { level: string; semester: string; academicYear: string }
-  ) => {
-    const response = await api.get(`/reports/department/${departmentId}/pdf`, {
-      params,
-      responseType: 'blob',
-    });
-    return response.data;
-  },
-
-  getFacultyStats: async (academicYear?: string) => {
-    const response = await api.get<ApiResponse>('/reports/faculty', {
-      params: { academicYear },
-    });
-    return response.data;
-  },
-
-  getStudentTranscript: async (studentId: string) => {
-    const response = await api.get<ApiResponse>(`/reports/transcript/${studentId}`);
-    return response.data;
-  },
-
-  downloadTranscriptPDF: async (studentId: string) => {
-    const response = await api.get(`/reports/transcript/${studentId}/pdf`, {
-      responseType: 'blob',
-    });
-    return response.data;
-  },
-};
-
-// ======================
-// DEPARTMENTS API
-// ======================
-
+// Departments API
 export const departmentsApi = {
   getAll: async (facultyId?: string) => {
-    const response = await api.get<ApiResponse>('/departments', {
-      params: { facultyId },
-    });
+    const response = await api.get<ApiResponse>('/departments', { params: { facultyId } });
     return response.data;
   },
-
   getById: async (id: string) => {
     const response = await api.get<ApiResponse>(`/departments/${id}`);
     return response.data;
   },
-
-  getMyDepartment: async () => {
-    const response = await api.get<ApiResponse>('/departments/my-department');
-    return response.data;
-  },
 };
 
-// ======================
-// FACULTIES API
-// ======================
-
-export const facultiesApi = {
-  getAll: async () => {
-    const response = await api.get<ApiResponse>('/faculties');
+// Reports API
+export const reportsApi = {
+  getDepartmentReport: async (departmentId: string, params: any) => {
+    const response = await api.get<ApiResponse>(`/reports/department/${departmentId}`, { params });
     return response.data;
   },
-
-  getById: async (id: string) => {
-    const response = await api.get<ApiResponse>(`/faculties/${id}`);
+  downloadDepartmentReportPDF: async (departmentId: string, params: any) => {
+    const response = await api.get(`/reports/department/${departmentId}/pdf`, { params, responseType: 'blob' });
     return response.data;
   },
-
-  getMyFaculty: async () => {
-    const response = await api.get<ApiResponse>('/faculties/my-faculty');
+  getFacultyStats: async (academicYear?: string) => {
+    const response = await api.get<ApiResponse>('/reports/faculty', { params: { academicYear } });
     return response.data;
   },
 };

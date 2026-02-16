@@ -1,4 +1,4 @@
-// src/routes/index.ts
+// FILE: backend/src/routes/index.ts
 
 import { Router } from 'express';
 import authRoutes from './auth.routes.js';
@@ -9,6 +9,7 @@ import gpaRoutes from './gpa.routes.js';
 import reportRoutes from './report.routes.js';
 import departmentRoutes from './department.routes.js';
 import facultyRoutes from './faculty.routes.js';
+import bulkRoutes from './bulk.routes.js';
 
 const router = Router();
 
@@ -18,6 +19,13 @@ router.get('/health', (req, res) => {
     success: true,
     message: 'API is running',
     timestamp: new Date().toISOString(),
+    version: '1.0.0',
+    features: {
+      bulkStudentImport: true,
+      bulkScoreUpload: true,
+      singleScoreManagement: true,
+      gpaRecalculation: true,
+    },
   });
 });
 
@@ -30,5 +38,6 @@ router.use('/gpa', gpaRoutes);
 router.use('/reports', reportRoutes);
 router.use('/departments', departmentRoutes);
 router.use('/faculties', facultyRoutes);
+router.use('/bulk', bulkRoutes);
 
 export default router;

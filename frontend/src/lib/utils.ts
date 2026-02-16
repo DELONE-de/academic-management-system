@@ -1,10 +1,7 @@
-// src/lib/utils.ts
+// FILE: frontend/src/lib/utils.ts
 
 import { Level, Semester, Grade } from '@/types';
 
-/**
- * Formats level for display
- */
 export function formatLevel(level: Level): string {
   const levelMap: Record<Level, string> = {
     ND1: 'ND 1',
@@ -20,16 +17,10 @@ export function formatLevel(level: Level): string {
   return levelMap[level] || level;
 }
 
-/**
- * Formats semester for display
- */
 export function formatSemester(semester: Semester): string {
   return semester === 'FIRST' ? 'First Semester' : 'Second Semester';
 }
 
-/**
- * Gets grade color class
- */
 export function getGradeColor(grade: Grade): string {
   const colorMap: Record<Grade, string> = {
     A: 'text-green-600 bg-green-100',
@@ -42,9 +33,6 @@ export function getGradeColor(grade: Grade): string {
   return colorMap[grade] || 'text-gray-600 bg-gray-100';
 }
 
-/**
- * Gets class of degree based on CGPA
- */
 export function getClassOfDegree(cgpa: number): string {
   if (cgpa >= 4.5) return 'First Class Honours';
   if (cgpa >= 3.5) return 'Second Class Upper Division';
@@ -54,9 +42,6 @@ export function getClassOfDegree(cgpa: number): string {
   return 'Fail';
 }
 
-/**
- * Gets class color based on CGPA
- */
 export function getClassColor(cgpa: number): string {
   if (cgpa >= 4.5) return 'text-green-600 bg-green-100';
   if (cgpa >= 3.5) return 'text-blue-600 bg-blue-100';
@@ -65,24 +50,11 @@ export function getClassColor(cgpa: number): string {
   return 'text-red-600 bg-red-100';
 }
 
-/**
- * Generates academic years list
- */
-export function generateAcademicYears(count: number = 5): string[] {
+export function generateAcademicYears(count = 5): string[] {
   const currentYear = new Date().getFullYear();
-  const years: string[] = [];
-  
-  for (let i = 0; i < count; i++) {
-    const startYear = currentYear - i;
-    years.push(`${startYear}/${startYear + 1}`);
-  }
-  
-  return years;
+  return Array.from({ length: count }, (_, i) => `${currentYear - i}/${currentYear - i + 1}`);
 }
 
-/**
- * Available levels
- */
 export const LEVELS: Level[] = [
   'LEVEL_100',
   'LEVEL_200',
@@ -95,14 +67,8 @@ export const LEVELS: Level[] = [
   'HND2',
 ];
 
-/**
- * Available semesters
- */
 export const SEMESTERS: Semester[] = ['FIRST', 'SECOND'];
 
-/**
- * Downloads a blob as file
- */
 export function downloadBlob(blob: Blob, filename: string): void {
   const url = window.URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -114,9 +80,6 @@ export function downloadBlob(blob: Blob, filename: string): void {
   window.URL.revokeObjectURL(url);
 }
 
-/**
- * Formats date for display
- */
 export function formatDate(dateString: string): string {
   return new Date(dateString).toLocaleDateString('en-NG', {
     year: 'numeric',
@@ -125,9 +88,34 @@ export function formatDate(dateString: string): string {
   });
 }
 
-/**
- * Classnames helper
- */
 export function cn(...classes: (string | boolean | undefined)[]): string {
   return classes.filter(Boolean).join(' ');
+}
+
+export function parseLevel(levelStr: string): Level | null {
+  const normalized = levelStr.toUpperCase().replace(/\s+/g, '_');
+  const levelMap: Record<string, Level> = {
+    'ND1': 'ND1',
+    'ND2': 'ND2',
+    'HND1': 'HND1',
+    'HND2': 'HND2',
+    '100': 'LEVEL_100',
+    'LEVEL_100': 'LEVEL_100',
+    '200': 'LEVEL_200',
+    'LEVEL_200': 'LEVEL_200',
+    '300': 'LEVEL_300',
+    'LEVEL_300': 'LEVEL_300',
+    '400': 'LEVEL_400',
+    'LEVEL_400': 'LEVEL_400',
+    '500': 'LEVEL_500',
+    'LEVEL_500': 'LEVEL_500',
+  };
+  return levelMap[normalized] || null;
+}
+
+export function parseSemester(semesterStr: string): Semester | null {
+  const normalized = semesterStr.toUpperCase().trim();
+  if (['FIRST', '1', '1ST'].includes(normalized)) return 'FIRST';
+  if (['SECOND', '2', '2ND'].includes(normalized)) return 'SECOND';
+  return null;
 }

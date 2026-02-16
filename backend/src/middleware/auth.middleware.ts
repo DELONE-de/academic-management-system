@@ -1,4 +1,4 @@
-// src/middleware/auth.middleware.ts
+// FILE: backend/src/middleware/auth.middleware.ts
 
 import { Response, NextFunction } from 'express';
 import { UserRole } from '@prisma/client';
@@ -30,7 +30,6 @@ export async function authenticate(
       return;
     }
 
-    // Verify user still exists and is active
     const user = await prisma.user.findUnique({
       where: { id: payload.id },
       select: {
@@ -48,7 +47,6 @@ export async function authenticate(
       return;
     }
 
-    // Attach user to request
     req.user = {
       id: user.id,
       email: user.email,
@@ -65,7 +63,7 @@ export async function authenticate(
 
 /**
  * Authorization middleware factory - checks user role
- * @param allowedRoles - Array of roles allowed to access the route
+ * Supports multiple roles
  */
 export function authorize(...allowedRoles: UserRole[]) {
   return (req: AuthRequest, res: Response, next: NextFunction): void => {
@@ -133,7 +131,6 @@ export async function restrictToFaculty(
     return;
   }
 
-  // Check if the department belongs to the dean's faculty
   const departmentId = req.params.departmentId || req.body.departmentId;
 
   if (departmentId) {

@@ -1,4 +1,4 @@
-// src/app/(dashboard)/students/page.tsx
+// FILE: frontend/src/app/(dashboard)/students/page.tsx
 
 'use client';
 
@@ -7,13 +7,20 @@ import { useAuth } from '@/hooks/useAuth';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { Table } from '@/components/ui/Table';
 import { Modal } from '@/components/ui/Modal';
-import { StudentForm } from '@/components/forms/StudentForm';
 import { studentsApi } from '@/lib/api';
 import { Student } from '@/types';
-import { formatLevel } from '@/lib/utils';
-import { PlusIcon, PencilIcon, TrashIcon, EyeIcon } from '@heroicons/react/24/outline';
+import { formatLevel, LEVELS } from '@/lib/utils';
+import { 
+  PlusIcon, 
+  PencilIcon, 
+  TrashIcon, 
+  EyeIcon,
+  CloudArrowUpIcon,
+  MagnifyingGlassIcon
+} from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
 
@@ -22,73 +29,37 @@ export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [levelFilter, setLevelFilter] = useState('');
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const limit = 20;
 
   const fetchStudents = useCallback(async () => {
     try {
       setIsLoading(true);
       const response = await studentsApi.getAll({
         departmentId: user?.departmentId || undefined,
+        level: levelFilter || undefined,
         search: search || undefined,
+        page,
+        limit,
       });
       if (response.success) {
-        setStudents(response.data);
+        setStudents(response.data || []);
+        setTotal(response.meta?.total || 0);
       }
     } catch (error) {
       toast.error('Failed to fetch students');
     } finally {
       setIsLoading(false);
     }
-  }, [user?.departmentId, search]);
+  }, [user?.departmentId, search, levelFilter, page]);
 
   useEffect(() => {
     if (user) {
       fetchStudents();
     }
   }, [user, fetchStudents]);
-
-  const handleCreate = async (data: any) => {
-    setIsSubmitting(true);
-    try {
-      const payload = {
-        ...data,
-        departmentId: user?.departmentId,
-        email: data.email || undefined,
-        phone: data.phone || undefined,
-        middleName: data.middleName || undefined,
-      };
-      const response = await studentsApi.create(payload);
-      if (response.success) {
-        toast.success('Student created successfully');
-        setIsModalOpen(false);
-        fetchStudents();
-      }
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to create student');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleUpdate = async (data: any) => {
-    if (!editingStudent) return;
-    setIsSubmitting(true);
-    try {
-      const response = await studentsApi.update(editingStudent.id, data);
-      if (response.success) {
-        toast.success('Student updated successfully');
-        setIsModalOpen(false);
-        setEditingStudent(null);
-        fetchStudents();
-      }
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to update student');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this student?')) return;
@@ -117,9 +88,7 @@ export default function StudentsPage() {
           <div className="font-medium text-gray-900">
             {student.lastName} {student.firstName} {student.middleName}
           </div>
-          {student.email && (
-            <div className="text-sm text-gray-500">{student.email}</div>
-          )}
+          {student.email && <div className="text-sm text-gray-500">{student.email}</div>}
         </div>
       ),
     },
@@ -145,16 +114,6 @@ export default function StudentsPage() {
             <EyeIcon className="h-5 w-5" />
           </Link>
           <button
-            onClick={() => {
-              setEditingStudent(student);
-              setIsModalOpen(true);
-            }}
-            className="p-1 text-gray-500 hover:text-primary-600"
-            title="Edit"
-          >
-            <PencilIcon className="h-5 w-5" />
-          </button>
-          <button
             onClick={() => handleDelete(student.id)}
             className="p-1 text-gray-500 hover:text-red-600"
             title="Delete"
@@ -173,26 +132,48 @@ export default function StudentsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Students</h1>
           <p className="text-gray-500">Manage students in your department</p>
         </div>
-        {user?.role === 'HOD' && (
-          <Button
-            onClick={() => {
-              setEditingStudent(null);
-              setIsModalOpen(true);
-            }}
-          >
-            <PlusIcon className="h-5 w-5 mr-2" />
-            Add Student
-          </Button>
-        )}
+        <div className="flex gap-3">
+          {user?.role === 'HOD' && (
+            <>
+              <Link href="/students/upload">
+                <Button variant="outline">
+                  <CloudArrowUpIcon className="h-5 w-5 mr-2" />
+                  Bulk Import
+                </Button>
+              </Link>
+              <Link href="/students/new">
+                <Button>
+                  <PlusIcon className="h-5 w-5 mr-2" />
+                  Add Student
+                </Button>
+              </Link>
+            </>
+          )}
+        </div>
       </div>
 
       <Card>
-        <div className="mb-4">
-          <Input
-            placeholder="Search by name or matric number..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="max-w-md"
+        <div className="flex flex-wrap gap-4 mb-4">
+          <div className="flex-1 min-w-[200px]">
+            <div className="relative">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search by name or matric number..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+          </div>
+          <Select
+            value={levelFilter}
+            onChange={(e) => setLevelFilter(e.target.value)}
+            options={[
+              { value: '', label: 'All Levels' },
+              ...LEVELS.map((l) => ({ value: l, label: formatLevel(l) })),
+            ]}
+            className="w-48"
           />
         </div>
 
@@ -203,27 +184,31 @@ export default function StudentsPage() {
           isLoading={isLoading}
           emptyMessage="No students found"
         />
-      </Card>
 
-      <Modal
-        isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          setEditingStudent(null);
-        }}
-        title={editingStudent ? 'Edit Student' : 'Add New Student'}
-        size="lg"
-      >
-        <StudentForm
-          student={editingStudent || undefined}
-          onSubmit={editingStudent ? handleUpdate : handleCreate}
-          onCancel={() => {
-            setIsModalOpen(false);
-            setEditingStudent(null);
-          }}
-          isLoading={isSubmitting}
-        />
-      </Modal>
+        {total > limit && (
+          <div className="mt-4 flex justify-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page === 1}
+              onClick={() => setPage(p => p - 1)}
+            >
+              Previous
+            </Button>
+            <span className="px-4 py-2 text-sm text-gray-600">
+              Page {page} of {Math.ceil(total / limit)}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page >= Math.ceil(total / limit)}
+              onClick={() => setPage(p => p + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

@@ -1,14 +1,15 @@
-// src/routes/student.routes.ts
+// FILE: backend/src/routes/student.routes.ts
 
 import { Router } from 'express';
 import { studentController } from '../controllers/student.controller.js';
+import { bulkController } from '../controllers/bulk.controller.js';
 import { authenticate, authorize } from '../middleware/auth.middleware.js';
 import { validateBody } from '../middleware/validation.middleware.js';
 import { createStudentSchema, updateStudentSchema } from '../validators/student.validator.js';
+import { uploadExcel, handleMulterError } from '../middleware/upload.middleware.js';
 
 const router = Router();
 
-// All routes require authentication
 router.use(authenticate);
 
 /**
@@ -16,16 +17,31 @@ router.use(authenticate);
  * @desc    Create a new student
  * @access  HOD only
  */
+router.post('/', authorize('HOD'), validateBody(createStudentSchema), studentController.create);
+
+/**
+ * @route   POST /api/students/bulk-upload
+ * @desc    Bulk import students from Excel file
+ * @access  HOD only
+ */
 router.post(
-  '/',
+  '/bulk-upload',
   authorize('HOD'),
-  validateBody(createStudentSchema),
-  studentController.create
+  uploadExcel.single('file'),
+  handleMulterError,
+  bulkController.bulkImportStudents
 );
 
 /**
+ * @route   GET /api/students/bulk-upload/template
+ * @desc    Download student upload template
+ * @access  HOD only
+ */
+router.get('/bulk-upload/template', authorize('HOD'), bulkController.downloadStudentTemplate);
+
+/**
  * @route   GET /api/students
- * @desc    Get all students with filtering
+ * @desc    Get all students
  * @access  HOD, DEAN
  */
 router.get('/', studentController.findAll);
@@ -42,12 +58,7 @@ router.get('/:id', studentController.findById);
  * @desc    Update student
  * @access  HOD only
  */
-router.put(
-  '/:id',
-  authorize('HOD'),
-  validateBody(updateStudentSchema),
-  studentController.update
-);
+router.put('/:id', authorize('HOD'), validateBody(updateStudentSchema), studentController.update);
 
 /**
  * @route   DELETE /api/students/:id
@@ -61,9 +72,6 @@ router.delete('/:id', authorize('HOD'), studentController.delete);
  * @desc    Get students by department and level
  * @access  HOD, DEAN
  */
-router.get(
-  '/department/:departmentId/level/:level',
-  studentController.getByDepartmentLevel
-);
+router.get('/department/:departmentId/level/:level', studentController.getByDepartmentLevel);
 
 export default router;
