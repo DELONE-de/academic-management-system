@@ -29,9 +29,9 @@ export default function StudentDetailsPage() {
           resultsApi.getCarryOvers(params.id as string),
         ]);
 
-        if (studentRes.success) setStudent(studentRes.data);
+        if (studentRes.success) setStudent(studentRes.data || null);
         if (gpaRes.success) setGpaHistory(gpaRes.data);
-        if (carryOverRes.success) setCarryOvers(carryOverRes.data);
+        if (carryOverRes.success) setCarryOvers(carryOverRes.data || []);
       } catch (error) {
         toast.error('Failed to fetch student details');
       } finally {

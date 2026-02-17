@@ -34,7 +34,7 @@ export default function CGPAPage() {
         search: search || undefined,
       });
       if (response.success) {
-        setStudents(response.data);
+        setStudents(response.data || []);
       }
     } catch (error) {
       toast.error('Failed to fetch students');

@@ -8,8 +8,14 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { LEVELS, SEMESTERS, formatLevel, formatSemester, generateAcademicYears } from '@/lib/utils';
 import { studentsApi, coursesApi, resultsApi, gpaApi } from '@/lib/api';
-import { Student, Course, Level, Semester, ScoreEntry } from '@/types';
+import { Student, Course, Level, Semester } from '@/types';
 import toast from 'react-hot-toast';
+
+interface ScoreEntry {
+  studentId: string;
+  courseId: string;
+  score: number;
+}
 
 interface ScoreEntryFormProps {
   departmentId: string;
@@ -38,11 +44,11 @@ export function ScoreEntryForm({ departmentId }: ScoreEntryFormProps) {
         ]);
 
         if (studentsRes.success) {
-          setStudents(studentsRes.data);
+          setStudents(studentsRes.data || []);
         }
 
         if (coursesRes.success) {
-          setCourses(coursesRes.data);
+          setCourses(coursesRes.data || []);
         }
 
         // Reset scores

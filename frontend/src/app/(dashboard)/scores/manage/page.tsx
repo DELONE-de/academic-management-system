@@ -117,7 +117,7 @@ export default function ManageScoresPage() {
       }
 
       if (gpaRes?.success) {
-        setStudentGPA(gpaRes.data);
+        setStudentGPA(gpaRes.data || null);
       } else {
         setStudentGPA(null);
       }

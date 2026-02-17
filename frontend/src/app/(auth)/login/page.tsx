@@ -107,7 +107,8 @@ export default function LoginPage() {
               Demo Credentials:
             </p>
             <div className="mt-2 text-center text-xs text-gray-400 space-y-1">
-              <p>HOD: hod.csc@university.edu.ng / password123</p>
+              <p>HOD HIM: hod.him@university.edu.ng / password123</p>
+              <p>HOD ITH: hod.ith@university.edu.ng / password123</p>
               <p>Dean: dean.science@university.edu.ng / password123</p>
             </div>
           </div>

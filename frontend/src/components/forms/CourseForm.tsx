@@ -46,7 +46,6 @@ export function CourseForm({ course, onSubmit, onCancel, isLoading }: CourseForm
           level: course.level,
           semester: course.semester,
           isElective: course.isElective,
-          description: course.description || '',
         }
       : {
           unit: 3,

@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 interface Column<T> {
   key: string;
   header: string;
-  render?: (item: T) => React.ReactNode;
+  render?: (item: T, index: number) => React.ReactNode;
   className?: string;
 }
 
@@ -64,7 +64,7 @@ export function Table<T>({
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
-          {data.map((item) => (
+          {data.map((item, index) => (
             <tr key={keyExtractor(item)} className="hover:bg-gray-50">
               {columns.map((column) => (
                 <td
@@ -72,7 +72,7 @@ export function Table<T>({
                   className={cn('px-6 py-4 whitespace-nowrap text-sm', column.className)}
                 >
                   {column.render
-                    ? column.render(item)
+                    ? column.render(item, index)
                     : (item as any)[column.key]}
                 </td>
               ))}

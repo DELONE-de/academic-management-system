@@ -35,7 +35,7 @@ export default function CoursesPage() {
         semester: semesterFilter || undefined,
       });
       if (response.success) {
-        setCourses(response.data);
+        setCourses(response.data || []);
       }
     } catch (error) {
       toast.error('Failed to fetch courses');

@@ -252,6 +252,10 @@ export const reportsApi = {
     const response = await api.get(`/reports/department/${departmentId}/pdf`, { params, responseType: 'blob' });
     return response.data;
   },
+  downloadTranscriptPDF: async (studentId: string): Promise<Blob> => {
+    const response = await api.get(`/reports/transcript/${studentId}/pdf`, { responseType: 'blob' });
+    return response.data;
+  },
   getFacultyStats: async (academicYear?: string) => {
     const response = await api.get<ApiResponse>('/reports/faculty', { params: { academicYear } });
     return response.data;

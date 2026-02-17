@@ -63,7 +63,7 @@ export function Sidebar() {
         {navItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
           const hasChildren = 'children' in item && item.children;
-          const isParentActive = hasChildren && item.children?.some(child => pathname === child.href);
+          const isParentActive = hasChildren && (item as any).children?.some((child: any) => pathname === child.href);
 
           return (
             <div key={item.href}>
@@ -83,7 +83,7 @@ export function Sidebar() {
               {/* Sub-navigation for items with children */}
               {hasChildren && (isActive || isParentActive) && (
                 <div className="ml-8 mt-1 space-y-1">
-                  {item.children?.map((child) => (
+                  {(item as any).children?.map((child: any) => (
                     <Link
                       key={child.href}
                       href={child.href}

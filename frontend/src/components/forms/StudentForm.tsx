@@ -49,7 +49,6 @@ export function StudentForm({ student, onSubmit, onCancel, isLoading }: StudentF
           lastName: student.lastName,
           middleName: student.middleName || '',
           email: student.email || '',
-          phone: student.phone || '',
           currentLevel: student.currentLevel,
           admissionYear: student.admissionYear,
         }

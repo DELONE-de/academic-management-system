@@ -161,6 +161,21 @@ export interface StudentWithGPA {
   semesterGpas: SemesterGPA[];
 }
 
+export interface DepartmentStats {
+  totalStudents: number;
+  highestGpa: number;
+  lowestGpa: number;
+  averageGpa: number;
+  firstClass: number;
+  secondClassUpper: number;
+  secondClassLower: number;
+  thirdClass: number;
+  pass: number;
+  fail: number;
+  carryOverCount: number;
+  passRate: number;
+}
+
 export interface AuthContextType {
   user: User | null;
   token: string | null;
