@@ -102,6 +102,15 @@ export default function LoginPage() {
             </Button>
           </form>
 
+          <div className="mt-6 text-center">
+            <p className="text-sm text-gray-600">
+              Don't have an account?{' '}
+              <a href="/signup" className="text-primary-600 hover:text-primary-700 font-medium">
+                Sign up
+              </a>
+            </p>
+          </div>
+
           <div className="mt-6 border-t border-gray-200 pt-6">
             <p className="text-center text-sm text-gray-500">
               Demo Credentials:
