@@ -22,6 +22,7 @@ router.post('/login', validateBody(loginSchema), authController.login);
  * @access  Public (should be protected in production)
  */
 router.post('/register', validateBody(registerSchema), authController.register);
+router.post('/signup', validateBody(registerSchema), authController.register);
 
 /**
  * @route   GET /api/auth/profile
