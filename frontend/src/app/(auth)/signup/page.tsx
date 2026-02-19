@@ -61,7 +61,7 @@ export default function SignupPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const deptRes = await departmentsApi.getAll();
+        const deptRes = await departmentsApi.getAllPublic();
         if (deptRes.success) {
           setDepartments(deptRes.data || []);
           

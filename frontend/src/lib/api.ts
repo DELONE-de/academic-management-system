@@ -236,6 +236,10 @@ export const departmentsApi = {
     const response = await api.get<ApiResponse>('/departments', { params: { facultyId } });
     return response.data;
   },
+  getAllPublic: async () => {
+    const response = await api.get<ApiResponse>('/departments/public');
+    return response.data;
+  },
   getById: async (id: string) => {
     const response = await api.get<ApiResponse>(`/departments/${id}`);
     return response.data;

@@ -6,6 +6,13 @@ import { authenticate } from '../middleware/auth.middleware.js';
 
 const router = Router();
 
+/**
+ * @route   GET /api/departments/public
+ * @desc    Get all departments (public for signup)
+ * @access  Public
+ */
+router.get('/public', departmentController.findAllPublic);
+
 router.use(authenticate);
 
 /**

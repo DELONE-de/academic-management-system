@@ -6,6 +6,15 @@ import { sendSuccess } from '../utils/response.js';
 import { AuthRequest } from '../types/index.js';
 
 export class DepartmentController {
+  async findAllPublic(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const departments = await departmentService.findAll();
+      sendSuccess(res, departments, 'Departments retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async findAll(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       // DEAN can only see their faculty's departments
