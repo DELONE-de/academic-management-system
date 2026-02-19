@@ -46,6 +46,86 @@ const departmentHealthInformatioManagement = await prisma.department.create({
     },
   });
 
+  const departmentOptometry = await prisma.department.create({
+    data: {
+      name: 'Optometry',
+      code: 'OPT',
+      description: 'Department of Optometry',
+      passMark: 50,
+      facultyId: facultybms.id,
+    },
+  });
+
+  const departmentAnatomy = await prisma.department.create({
+    data: {
+      name: 'Anatomy',
+      code: 'ANA',
+      description: 'Department of Anatomy',
+      passMark:40,
+      facultyId: facultybms.id,
+    },
+  });
+
+  const departmentPhysiology = await prisma.department.create({
+    data: {
+      name: 'Physiology',
+      code: 'PHY',
+      description: 'Department of Physiology',
+      passMark:40,
+      facultyId: facultybms.id,
+    },
+  });
+
+  const departmentPhysiotherapy = await prisma.department.create({
+    data: {
+      name: 'Physiotherapy',
+      code: 'PHT',
+      description: 'Department of Physiotherapy',
+      passMark: 50,
+      facultyId: facultybms.id,
+    },
+  });
+
+  const departmentDentalTherapy = await prisma.department.create({
+    data: {
+      name: 'Dental Therapy',
+      code: 'DEN',
+      description: 'Department of Dental Therapy',
+      passMark: 40,
+      facultyId: facultybms.id,
+    },
+  });
+
+  const departmentDentalTechnology = await prisma.department.create({
+    data: {
+      name: 'Dental Technology',
+      code: 'DET',
+      description: 'Department of Dental Technology',
+      passMark:40,
+      facultyId: facultybms.id,
+    },
+  });
+
+  const departmentRadiography = await prisma.department.create({
+    data: {
+      name: 'Radiography',
+      code: 'RAD',
+      description: 'Department of Radiography',
+      passMark:40,
+      facultyId: facultybms.id,
+    },
+  });
+
+  const departmentNutritionDietary = await prisma.department.create({
+    data: {
+      name: 'Nutrition and Dietary',
+      code: 'NUD',
+      description: 'Department of Nutrition and Dietary',
+      passMark:40,
+      facultyId: facultybms.id,
+    },
+  });
+
   console.log('✅ Created departments and falculty');
 
  // Create Users (HOD and DEAN)
