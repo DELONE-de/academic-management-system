@@ -100,8 +100,8 @@ export class AuthService {
         firstName,
         lastName,
         role,
-        departmentId: role === 'HOD' ? departmentId : null,
-        facultyId: role === 'DEAN' ? facultyId : null,
+        departmentId: role === 'HOD' ? departmentId : undefined,
+        facultyId: role === 'DEAN' ? facultyId : undefined,
       },
       include: {
         department: {
