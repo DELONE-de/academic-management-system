@@ -75,7 +75,7 @@ app.use(errorHandler);
 // SERVER STARTUP
 // ======================
 
-const PORT =  '0.0.0.0';
+const PORT =  5000;
 
 async function startServer(): Promise<void> {
   try {
