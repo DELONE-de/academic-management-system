@@ -12,6 +12,7 @@ dotenv.config();
 import routes from './routes/index.js';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware.js';
 import { connectDatabase, disconnectDatabase } from './config/database.js';
+import process from 'process';
 
 // Create Express application
 const app: Application = express();
@@ -75,7 +76,7 @@ app.use(errorHandler);
 // SERVER STARTUP
 // ======================
 
-const PORT =  5000;
+const PORT = process.env.PORT || 5000;
 
 async function startServer(): Promise<void> {
   try {
