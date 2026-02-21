@@ -20,8 +20,6 @@ const studentSchema = z.object({
   firstName: z.string().min(2, 'First name is required'),
   lastName: z.string().min(2, 'Last name is required'),
   middleName: z.string().optional(),
-  email: z.string().email('Invalid email').optional().or(z.literal('')),
-  phone: z.string().optional(),
   currentLevel: z.string().min(1, 'Level is required'),
   admissionYear: z.number().int().min(1990).max(new Date().getFullYear()),
 });
@@ -48,7 +46,6 @@ export function StudentForm({ student, onSubmit, onCancel, isLoading }: StudentF
           firstName: student.firstName,
           lastName: student.lastName,
           middleName: student.middleName || '',
-          email: student.email || '',
           currentLevel: student.currentLevel,
           admissionYear: student.admissionYear,
         }
@@ -84,20 +81,6 @@ export function StudentForm({ student, onSubmit, onCancel, isLoading }: StudentF
           error={errors.lastName?.message}
           {...register('lastName')}
           required
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <Input
-          label="Email"
-          type="email"
-          error={errors.email?.message}
-          {...register('email')}
-        />
-        <Input
-          label="Phone"
-          error={errors.phone?.message}
-          {...register('phone')}
         />
       </div>
 

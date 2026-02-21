@@ -19,17 +19,6 @@ export class StudentService {
       throw new AppError('Matriculation number already exists', 400);
     }
 
-    // Check if email already exists (if provided)
-    if (input.email) {
-      const emailExists = await prisma.student.findUnique({
-        where: { email: input.email },
-      });
-
-      if (emailExists) {
-        throw new AppError('Email already registered', 400);
-      }
-    }
-
     const student = await prisma.student.create({
       data: input,
       include: {
