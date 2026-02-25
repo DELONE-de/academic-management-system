@@ -81,61 +81,81 @@ export async function generateDepartmentReportPDF(
 
   // Student Results Table
   doc
-    .fontSize(14)
+    .fontSize(12)
     .font('Helvetica-Bold')
     .text('STUDENT RESULTS', { underline: true })
     .moveDown(0.5);
 
-  // Table header
-  const tableTop = doc.y;
-  const colWidths = [30, 250, 50, 50, 50, 50];
-  const headers = ['S/N', 'Courses (Score)', 'TNU', 'TCP', 'GPA', 'C/O'];
-
-  doc.fontSize(10).font('Helvetica-Bold');
-  
-  let xPos = 50;
-  headers.forEach((header, i) => {
-    doc.text(header, xPos, tableTop, { width: colWidths[i], align: 'left' });
-    xPos += colWidths[i];
-  });
-
-  // Draw header underline
-  doc
-    .moveTo(50, tableTop + 15)
-    .lineTo(530, tableTop + 15)
-    .stroke();
-
-  // Table rows
-  doc.fontSize(9).font('Helvetica');
-  let yPos = tableTop + 25;
+  doc.fontSize(8).font('Helvetica');
 
   data.students.forEach((student) => {
     // Check if we need a new page
-    if (yPos > 700) {
+    if (doc.y > 680) {
       doc.addPage();
-      yPos = 50;
     }
 
-    xPos = 50;
-    const coursesWithScores = student.results && student.results.length > 0 
-      ? student.results.map(r => `${r.courseCode}(${r.score})`).join(', ') 
-      : 'N/A';
-    
-    const row = [
-      student.serialNumber?.toString() || '',
-      coursesWithScores,
-      student.totalUnits?.toString() || '0',
-      student.totalPoints?.toFixed(2) || '0.00',
-      student.gpa.toFixed(2),
-      student.carryOverCount?.toString() || '0',
-    ];
+    // Student header
+    doc
+      .fontSize(9)
+      .font('Helvetica-Bold')
+      .text(`${student.serialNumber}. ${student.matricNumber} - ${student.studentName}`, 50, doc.y)
+      .moveDown(0.3);
 
-    row.forEach((cell, i) => {
-      doc.text(cell, xPos, yPos, { width: colWidths[i], align: 'left' });
+    // Course table header
+    const tableTop = doc.y;
+    const colWidths = [80, 50, 50, 50, 50];
+    const headers = ['Course', 'Score', 'Grade', 'Unit', 'PXU'];
+
+    doc.fontSize(8).font('Helvetica-Bold');
+    let xPos = 70;
+    headers.forEach((header, i) => {
+      doc.text(header, xPos, tableTop, { width: colWidths[i], align: 'left' });
       xPos += colWidths[i];
     });
 
-    yPos += 20;
+    doc.fontSize(8).font('Helvetica');
+    let yPos = tableTop + 12;
+
+    // Course rows
+    if (student.results && student.results.length > 0) {
+      student.results.forEach((result) => {
+        if (yPos > 750) {
+          doc.addPage();
+          yPos = 50;
+        }
+
+        xPos = 70;
+        const row = [
+          result.courseCode,
+          result.score.toFixed(0),
+          result.grade,
+          result.unit.toString(),
+          result.pxu.toFixed(1),
+        ];
+
+        row.forEach((cell, i) => {
+          doc.text(cell, xPos, yPos, { width: colWidths[i], align: 'left' });
+          xPos += colWidths[i];
+        });
+
+        yPos += 12;
+      });
+    }
+
+    // Summary row
+    doc.fontSize(8).font('Helvetica-Bold');
+    xPos = 70;
+    doc.text('TOTAL:', xPos, yPos + 5);
+    xPos = 220;
+    doc.text(`TNU: ${student.totalUnits || 0}`, xPos, yPos + 5);
+    xPos = 280;
+    doc.text(`TCP: ${student.totalPoints?.toFixed(2) || '0.00'}`, xPos, yPos + 5);
+    xPos = 350;
+    doc.text(`GPA: ${student.gpa.toFixed(2)}`, xPos, yPos + 5);
+    xPos = 410;
+    doc.text(`C/O: ${student.carryOverCount || 0}`, xPos, yPos + 5);
+
+    doc.moveDown(1);
   });
 
   // Footer
