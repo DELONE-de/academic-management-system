@@ -112,6 +112,7 @@ export class ReportService {
     // Build student results with GPA and CGPA
     const studentResults: StudentResult[] = [];
     let totalCarryOvers = 0;
+    let serialNumber = 1;
 
     for (const gpa of semesterGpas) {
       const studentId = gpa.studentId;
@@ -131,6 +132,7 @@ export class ReportService {
       totalCarryOvers += carryOvers.length;
 
       studentResults.push({
+        serialNumber: serialNumber++,
         studentId,
         matricNumber: gpa.student.matricNumber,
         studentName: `${gpa.student.firstName} ${gpa.student.lastName}`,
@@ -147,8 +149,11 @@ export class ReportService {
           pxu: r.pxu,
           isCarryOver: r.isCarryOver,
         })),
+        totalUnits: gpa.totalUnits,
+        totalPoints: gpa.totalPoints,
         gpa: gpa.gpa,
         cgpa: cgpaData.cgpa,
+        carryOverCount: carryOvers.length,
       });
     }
 
