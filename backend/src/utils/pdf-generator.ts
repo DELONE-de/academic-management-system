@@ -88,8 +88,8 @@ export async function generateDepartmentReportPDF(
 
   // Table header
   const tableTop = doc.y;
-  const colWidths = [35, 90, 150, 60, 60, 60];
-  const headers = ['S/N', 'Matric No.', 'Name', 'GPA', 'CGPA', 'Carry-overs'];
+  const colWidths = [30, 250, 50, 50, 50, 50];
+  const headers = ['S/N', 'Courses (Score)', 'TNU', 'TCP', 'GPA', 'C/O'];
 
   doc.fontSize(10).font('Helvetica-Bold');
   
@@ -102,14 +102,14 @@ export async function generateDepartmentReportPDF(
   // Draw header underline
   doc
     .moveTo(50, tableTop + 15)
-    .lineTo(545, tableTop + 15)
+    .lineTo(530, tableTop + 15)
     .stroke();
 
   // Table rows
   doc.fontSize(9).font('Helvetica');
   let yPos = tableTop + 25;
 
-  data.students.forEach((student, index) => {
+  data.students.forEach((student) => {
     // Check if we need a new page
     if (yPos > 700) {
       doc.addPage();
@@ -117,14 +117,17 @@ export async function generateDepartmentReportPDF(
     }
 
     xPos = 50;
-    const carryOvers = student.results.filter(r => r.isCarryOver).length;
+    const coursesWithScores = student.results && student.results.length > 0 
+      ? student.results.map(r => `${r.courseCode}(${r.score})`).join(', ') 
+      : 'N/A';
+    
     const row = [
-      (index + 1).toString(),
-      student.matricNumber,
-      student.studentName,
+      student.serialNumber?.toString() || '',
+      coursesWithScores,
+      student.totalUnits?.toString() || '0',
+      student.totalPoints?.toFixed(2) || '0.00',
       student.gpa.toFixed(2),
-      student.cgpa?.toFixed(2) || 'N/A',
-      carryOvers.toString(),
+      student.carryOverCount?.toString() || '0',
     ];
 
     row.forEach((cell, i) => {
