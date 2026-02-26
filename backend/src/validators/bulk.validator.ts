@@ -176,10 +176,6 @@ export function validateScoreRow(row: any): string[] {
     errors.push('Matric number is required');
   }
   
-  if (!row.departmentCode || row.departmentCode.trim() === '') {
-    errors.push('Department code is required');
-  }
-  
   if (!row.courseCode || row.courseCode.trim() === '') {
     errors.push('Course code is required');
   }
@@ -188,18 +184,6 @@ export function validateScoreRow(row: any): string[] {
     errors.push('Valid score is required');
   } else if (row.score < 0 || row.score > 100) {
     errors.push('Score must be between 0 and 100');
-  }
-  
-  if (!row.studentLevel || row.studentLevel.trim() === '') {
-    errors.push('Student level is required');
-  } else if (!parseLevel(row.studentLevel)) {
-    errors.push(`Invalid level: ${row.studentLevel}. Valid values: ${validLevels.join(', ')}`);
-  }
-  
-  if (!row.semester || row.semester.trim() === '') {
-    errors.push('Semester is required');
-  } else if (!parseSemester(row.semester)) {
-    errors.push(`Invalid semester: ${row.semester}. Valid values: ${validSemesters.join(', ')}`);
   }
   
   if (!row.academicYear || row.academicYear.trim() === '') {

@@ -77,6 +77,7 @@ export function parseStudentRows(data: any[]): StudentImportRow[] {
  */
 export function parseScoreRows(data: any[]): ScoreImportRow[] {
   const rows: ScoreImportRow[] = [];
+  let rowNumber = 1;
   
   data.forEach((row, index) => {
     const matricNumber = getRowValue(row, ['matricnumber', 'matricno', 'matric']).toUpperCase();
