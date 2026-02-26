@@ -86,33 +86,19 @@ export class BulkResultService {
       if (!student) {
         rowErrors.push(`Student with matric number '${row.matricNumber}' not found`);
       } else {
-        // Verify department matches
-        if (student.deptCode.toUpperCase() !== row.departmentCode.toUpperCase()) {
-          rowErrors.push(`Student ${row.matricNumber} belongs to department ${student.deptCode}, not ${row.departmentCode}`);
-        }
-
         // For HOD, verify they can only add scores to their department
         if (userRole === 'HOD' && student.departmentId !== userDepartmentId) {
           rowErrors.push(`You can only add scores for students in your department`);
         }
       }
 
-      // Get course
-      const courseKey = `${row.departmentCode.toUpperCase()}-${row.courseCode.toUpperCase()}`;
-      const course = courseMap.get(courseKey);
-      if (!course) {
-        rowErrors.push(`Course '${row.courseCode}' not found in department '${row.departmentCode}'`);
-      } else {
-        // Validate course level and semester match
-        const level = parseLevel(row.studentLevel);
-        const semester = parseSemester(row.semester);
-        
-        if (level && course.level !== level) {
-          rowErrors.push(`Course ${row.courseCode} is for ${course.level}, not ${level}`);
-        }
-        
-        if (semester && course.semester !== semester) {
-          rowErrors.push(`Course ${row.courseCode} is for ${course.semester} semester, not ${semester}`);
+      // Get course - auto-detect from student's department
+      let course = null;
+      if (student) {
+        const courseKey = `${student.deptCode.toUpperCase()}-${row.courseCode.toUpperCase()}`;
+        course = courseMap.get(courseKey);
+        if (!course) {
+          rowErrors.push(`Course '${row.courseCode}' not found in student's department (${student.deptCode})`);
         }
       }
 
@@ -122,22 +108,22 @@ export class BulkResultService {
           matricNumber: row.matricNumber,
           courseCode: row.courseCode,
           score: row.score,
-          studentLevel: row.studentLevel,
-          semester: row.semester,
+          studentLevel: course?.level || '',
+          semester: course?.semester || '',
           academicYear: row.academicYear,
           errors: rowErrors,
         });
       } else if (student && course) {
-        const level = parseLevel(row.studentLevel)!;
-        const semester = parseSemester(row.semester)!;
-        
         validatedRows.push({
           ...row,
           studentId: student.id,
           courseId: course.id,
           departmentId: student.departmentId,
-          level,
-          semesterEnum: semester,
+          departmentCode: student.deptCode,
+          level: course.level,
+          semesterEnum: course.semester,
+          studentLevel: course.level,
+          semester: course.semester,
           passMark: student.passMark,
           courseUnit: course.unit,
         });

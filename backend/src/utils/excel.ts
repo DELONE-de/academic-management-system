@@ -73,19 +73,38 @@ export function parseStudentRows(data: any[]): StudentImportRow[] {
 }
 
 /**
- * Parse score rows from Excel data
+ * Parse score rows from Excel data (horizontal format)
  */
 export function parseScoreRows(data: any[]): ScoreImportRow[] {
-  return data.map((row, index) => ({
-    rowNumber: index + 2,
-    matricNumber: getRowValue(row, ['matricnumber', 'matricno', 'matric']).toUpperCase(),
-    departmentCode: getRowValue(row, ['departmentcode', 'deptcode', 'department', 'dept']).toUpperCase(),
-    courseCode: getRowValue(row, ['coursecode', 'course_code', 'course']).toUpperCase(),
-    score: parseFloat(getRowValue(row, ['score', 'mark', 'marks', 'grade'])),
-    studentLevel: getRowValue(row, ['studentlevel', 'level', 'currentlevel']).toUpperCase(),
-    semester: getRowValue(row, ['semester', 'sem']).toUpperCase(),
-    academicYear: getRowValue(row, ['academicyear', 'academic_year', 'session', 'year']),
-  }));
+  const rows: ScoreImportRow[] = [];
+  
+  data.forEach((row, index) => {
+    const matricNumber = getRowValue(row, ['matricnumber', 'matricno', 'matric']).toUpperCase();
+    const academicYear = getRowValue(row, ['academicyear', 'academic_year', 'session', 'year']);
+    
+    // Extract all course columns (any column that's not MatricNumber or AcademicYear)
+    Object.keys(row).forEach(key => {
+      const normalizedKey = normalizeColumnName(key);
+      if (!normalizedKey.includes('matric') && !normalizedKey.includes('academic') && 
+          !normalizedKey.includes('year') && !normalizedKey.includes('session')) {
+        const score = parseFloat(String(row[key]).trim());
+        if (!isNaN(score) && score > 0) {
+          rows.push({
+            rowNumber: index + 2,
+            matricNumber,
+            departmentCode: '',
+            courseCode: key.toUpperCase().trim(),
+            score,
+            studentLevel: '',
+            semester: '',
+            academicYear,
+          });
+        }
+      }
+    });
+  });
+  
+  return rows;
 }
 
 /**
@@ -132,8 +151,6 @@ export function generateScoreErrorExcel(errors: ScoreImportError[]): Buffer {
     'Matric Number': error.matricNumber,
     'Course Code': error.courseCode,
     'Score': error.score,
-    'Level': error.studentLevel,
-    'Semester': error.semester,
     'Academic Year': error.academicYear,
     'Errors': error.errors.join('; '),
   }));
@@ -146,8 +163,6 @@ export function generateScoreErrorExcel(errors: ScoreImportError[]): Buffer {
     { wch: 18 }, // Matric Number
     { wch: 12 }, // Course Code
     { wch: 8 },  // Score
-    { wch: 12 }, // Level
-    { wch: 10 }, // Semester
     { wch: 12 }, // Academic Year
     { wch: 50 }, // Errors
   ];
@@ -222,29 +237,20 @@ export function generateScoreTemplate(): Buffer {
   const sampleData = [
     {
       'MatricNumber': 'CSC/2023/001',
-      'DepartmentCode': 'CSC',
-      'CourseCode': 'CSC101',
-      'Score': 75,
-      'StudentLevel': 'LEVEL_100',
-      'Semester': 'FIRST',
-      'AcademicYear': '2023/2024',
-    },
-    {
-      'MatricNumber': 'CSC/2023/001',
-      'DepartmentCode': 'CSC',
-      'CourseCode': 'CSC103',
-      'Score': 68,
-      'StudentLevel': 'LEVEL_100',
-      'Semester': 'FIRST',
+      'CSC101': 75,
+      'CSC103': 68,
+      'MTH101': 82,
+      'PHY101': 70,
+      'GST101': 65,
       'AcademicYear': '2023/2024',
     },
     {
       'MatricNumber': 'CSC/2023/002',
-      'DepartmentCode': 'CSC',
-      'CourseCode': 'CSC101',
-      'Score': 82,
-      'StudentLevel': 'LEVEL_100',
-      'Semester': 'FIRST',
+      'CSC101': 80,
+      'CSC103': 72,
+      'MTH101': 85,
+      'PHY101': 75,
+      'GST101': 70,
       'AcademicYear': '2023/2024',
     },
   ];
@@ -253,21 +259,17 @@ export function generateScoreTemplate(): Buffer {
   const worksheet = XLSX.utils.json_to_sheet(sampleData);
   
   worksheet['!cols'] = [
-    { wch: 18 }, { wch: 15 }, { wch: 12 }, { wch: 8 },
-    { wch: 15 }, { wch: 10 }, { wch: 12 },
+    { wch: 18 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 12 },
   ];
 
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Scores');
   
   // Add instructions sheet
   const instructionsData = [
-    { 'Field': 'MatricNumber', 'Description': 'Student matriculation number', 'Required': 'Yes' },
-    { 'Field': 'DepartmentCode', 'Description': 'Department code (must match student department)', 'Required': 'Yes' },
-    { 'Field': 'CourseCode', 'Description': 'Course code (e.g., CSC101)', 'Required': 'Yes' },
-    { 'Field': 'Score', 'Description': 'Score (0-100)', 'Required': 'Yes' },
-    { 'Field': 'StudentLevel', 'Description': 'Level: LEVEL_100, LEVEL_200, LEVEL_300, LEVEL_400, LEVEL_500, ND1, ND2, HND1, HND2', 'Required': 'Yes' },
-    { 'Field': 'Semester', 'Description': 'Semester: FIRST or SECOND', 'Required': 'Yes' },
-    { 'Field': 'AcademicYear', 'Description': 'Academic year (e.g., 2023/2024)', 'Required': 'Yes' },
+    { 'Field': 'MatricNumber', 'Description': 'Student matriculation number (first column)', 'Required': 'Yes' },
+    { 'Field': 'Course Codes', 'Description': 'Each course code as a column header (e.g., CSC101, MTH101). Put scores under each course.', 'Required': 'Yes' },
+    { 'Field': 'AcademicYear', 'Description': 'Academic year in last column (e.g., 2023/2024)', 'Required': 'Yes' },
+    { 'Field': 'Note', 'Description': 'Leave cell empty if student did not take that course. Course codes must match exactly.', 'Required': '-' },
   ];
   
   const instructionsSheet = XLSX.utils.json_to_sheet(instructionsData);
