@@ -187,7 +187,6 @@ export default function ScoreBulkUploadPage() {
               <tr><td className="px-4 py-2 font-medium">DepartmentCode</td><td className="px-4 py-2 text-green-600">Yes</td><td className="px-4 py-2">CSC (must match student)</td></tr>
               <tr><td className="px-4 py-2 font-medium">CourseCode</td><td className="px-4 py-2 text-green-600">Yes</td><td className="px-4 py-2">CSC101</td></tr>
               <tr><td className="px-4 py-2 font-medium">Score</td><td className="px-4 py-2 text-green-600">Yes</td><td className="px-4 py-2">0-100</td></tr>
-              // FILE: frontend/src/app/(dashboard)/scores/upload/page.tsx (continued)
 
               <tr><td className="px-4 py-2 font-medium">StudentLevel</td><td className="px-4 py-2 text-green-600">Yes</td><td className="px-4 py-2">LEVEL_100, LEVEL_200, ND1, HND1</td></tr>
               <tr><td className="px-4 py-2 font-medium">Semester</td><td className="px-4 py-2 text-green-600">Yes</td><td className="px-4 py-2">FIRST or SECOND</td></tr>
