@@ -143,29 +143,6 @@ const departmentHealthInformatioManagement = await prisma.department.create({
     },
   });
 
-   // HOD for  Health Information Management
-  await prisma.user.create({
-    data: {
-      email: 'hod.him@university.edu.ng',
-      password: hashedPassword,
-      firstName: 'Chidinma',
-      lastName: 'Okafor',
-      role: UserRole.HOD,
-      departmentId: departmentHealthInformatioManagement.id,
-    },
-  });
-
-  // Same HOD for Information Technology and Health Informatics (different login)
-  await prisma.user.create({
-    data: {
-      email: 'hod.ith@university.edu.ng',
-      password: hashedPassword,
-      firstName: 'Chidinma',
-      lastName: 'Okafor',
-      role: UserRole.HOD,
-      departmentId: departmentInformationThecnologyHealthInformatics.id,
-    },
-  });
 
   console.log('✅ Created users');
   console.log('🎉 Database seeding completed successfully!');
