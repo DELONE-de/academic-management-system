@@ -77,29 +77,35 @@ export function parseStudentRows(data: any[]): StudentImportRow[] {
  */
 export function parseScoreRows(data: any[]): ScoreImportRow[] {
   const rows: ScoreImportRow[] = [];
-  let rowNumber = 1;
   
   data.forEach((row, index) => {
     const matricNumber = getRowValue(row, ['matricnumber', 'matricno', 'matric']).toUpperCase();
     const academicYear = getRowValue(row, ['academicyear', 'academic_year', 'session', 'year']);
+    
+    if (!matricNumber || !academicYear) {
+      return; // Skip rows without matric number or academic year
+    }
     
     // Extract all course columns (any column that's not MatricNumber or AcademicYear)
     Object.keys(row).forEach(key => {
       const normalizedKey = normalizeColumnName(key);
       if (!normalizedKey.includes('matric') && !normalizedKey.includes('academic') && 
           !normalizedKey.includes('year') && !normalizedKey.includes('session')) {
-        const score = parseFloat(String(row[key]).trim());
-        if (!isNaN(score) && score > 0) {
-          rows.push({
-            rowNumber: index + 2,
-            matricNumber,
-            departmentCode: '',
-            courseCode: key.toUpperCase().trim(),
-            score,
-            studentLevel: '',
-            semester: '',
-            academicYear,
-          });
+        const scoreValue = String(row[key]).trim();
+        if (scoreValue && scoreValue !== '') {
+          const score = parseFloat(scoreValue);
+          if (!isNaN(score) && score >= 0) {
+            rows.push({
+              rowNumber: index + 2,
+              matricNumber,
+              departmentCode: '',
+              courseCode: key.toUpperCase().trim(),
+              score,
+              studentLevel: '',
+              semester: '',
+              academicYear,
+            });
+          }
         }
       }
     });
