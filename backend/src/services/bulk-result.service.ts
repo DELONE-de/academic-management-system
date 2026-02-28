@@ -199,7 +199,7 @@ export class BulkResultService {
 
       // Bulk insert new records
       if (newRecords.length > 0) {
-        await prisma.result.createMany({ data: newRecords, skipDuplicates: true });
+        await prisma.result.createMany({ data: newRecords });
       }
 
       // Bulk update existing records in batches
