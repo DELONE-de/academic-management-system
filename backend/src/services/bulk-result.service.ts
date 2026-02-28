@@ -151,26 +151,31 @@ export class BulkResultService {
       let successCount = 0;
       let updatedCount = 0;
 
-      // Process in smaller batches to avoid transaction timeout
-      const BATCH_SIZE = 50;
+      // Check existing results in bulk
+      const existingResults = await prisma.result.findMany({
+        where: {
+          OR: validatedRows.map(row => ({
+            studentId: row.studentId,
+            courseId: row.courseId,
+            academicYear: row.academicYear,
+          })),
+        },
+        select: { studentId: true, courseId: true, academicYear: true },
+      });
+      const existingSet = new Set(
+        existingResults.map(r => `${r.studentId}-${r.courseId}-${r.academicYear}`)
+      );
+
+      // Process in smaller batches
+      const BATCH_SIZE = 20;
       for (let i = 0; i < validatedRows.length; i += BATCH_SIZE) {
         const batch = validatedRows.slice(i, i + BATCH_SIZE);
         
         await prisma.$transaction(async (tx) => {
           for (const row of batch) {
-            // Calculate grade, grade point, and PXU
             const calculation = calculateResult(row.score, row.courseUnit, row.passMark);
-
-            // Upsert result
-            const existing = await tx.result.findUnique({
-              where: {
-                studentId_courseId_academicYear: {
-                  studentId: row.studentId,
-                  courseId: row.courseId,
-                  academicYear: row.academicYear,
-                },
-              },
-            });
+            const key = `${row.studentId}-${row.courseId}-${row.academicYear}`;
+            const isUpdate = existingSet.has(key);
 
             await tx.result.upsert({
               where: {
@@ -201,16 +206,12 @@ export class BulkResultService {
               },
             });
 
-            if (existing) {
-              updatedCount++;
-            } else {
-              successCount++;
-            }
-
+            if (isUpdate) updatedCount++;
+            else successCount++;
             affectedStudentIds.add(row.studentId);
           }
         }, {
-          timeout: 30000, // 30 seconds timeout
+          timeout: 60000,
         });
       }
 
