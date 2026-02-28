@@ -151,7 +151,7 @@ export class BulkResultService {
       let successCount = 0;
       let updatedCount = 0;
 
-      // Check existing results in bulk
+      // Check existing results
       const existingResults = await prisma.result.findMany({
         where: {
           OR: validatedRows.map(row => ({
@@ -160,58 +160,59 @@ export class BulkResultService {
             academicYear: row.academicYear,
           })),
         },
-        select: { studentId: true, courseId: true, academicYear: true },
+        select: { id: true, studentId: true, courseId: true, academicYear: true },
       });
-      const existingSet = new Set(
-        existingResults.map(r => `${r.studentId}-${r.courseId}-${r.academicYear}`)
+      const existingMap = new Map(
+        existingResults.map(r => [`${r.studentId}-${r.courseId}-${r.academicYear}`, r.id])
       );
 
-      // Process in smaller batches
-      const BATCH_SIZE = 20;
-      for (let i = 0; i < validatedRows.length; i += BATCH_SIZE) {
-        const batch = validatedRows.slice(i, i + BATCH_SIZE);
+      // Separate new and existing records
+      const newRecords = [];
+      const updateRecords = [];
+      
+      for (const row of validatedRows) {
+        const calculation = calculateResult(row.score, row.courseUnit, row.passMark);
+        const key = `${row.studentId}-${row.courseId}-${row.academicYear}`;
+        const resultId = existingMap.get(key);
         
-        await prisma.$transaction(async (tx) => {
-          for (const row of batch) {
-            const calculation = calculateResult(row.score, row.courseUnit, row.passMark);
-            const key = `${row.studentId}-${row.courseId}-${row.academicYear}`;
-            const isUpdate = existingSet.has(key);
+        affectedStudentIds.add(row.studentId);
+        
+        if (resultId) {
+          updateRecords.push({ id: resultId, ...calculation });
+          updatedCount++;
+        } else {
+          newRecords.push({
+            studentId: row.studentId,
+            courseId: row.courseId,
+            score: row.score,
+            grade: calculation.grade,
+            gradePoint: calculation.gradePoint,
+            pxu: calculation.pxu,
+            isCarryOver: calculation.isCarryOver,
+            level: row.level,
+            semester: row.semesterEnum,
+            academicYear: row.academicYear,
+          });
+          successCount++;
+        }
+      }
 
-            await tx.result.upsert({
-              where: {
-                studentId_courseId_academicYear: {
-                  studentId: row.studentId,
-                  courseId: row.courseId,
-                  academicYear: row.academicYear,
-                },
-              },
-              create: {
-                studentId: row.studentId,
-                courseId: row.courseId,
-                score: row.score,
-                grade: calculation.grade,
-                gradePoint: calculation.gradePoint,
-                pxu: calculation.pxu,
-                isCarryOver: calculation.isCarryOver,
-                level: row.level,
-                semester: row.semesterEnum,
-                academicYear: row.academicYear,
-              },
-              update: {
-                score: row.score,
-                grade: calculation.grade,
-                gradePoint: calculation.gradePoint,
-                pxu: calculation.pxu,
-                isCarryOver: calculation.isCarryOver,
-              },
-            });
+      // Bulk insert new records
+      if (newRecords.length > 0) {
+        await prisma.result.createMany({ data: newRecords });
+      }
 
-            if (isUpdate) updatedCount++;
-            else successCount++;
-            affectedStudentIds.add(row.studentId);
-          }
-        }, {
-          timeout: 60000,
+      // Bulk update existing records in batches
+      for (const record of updateRecords) {
+        await prisma.result.update({
+          where: { id: record.id },
+          data: {
+            score: record.score,
+            grade: record.grade,
+            gradePoint: record.gradePoint,
+            pxu: record.pxu,
+            isCarryOver: record.isCarryOver,
+          },
         });
       }
 
