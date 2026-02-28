@@ -151,60 +151,68 @@ export class BulkResultService {
       let successCount = 0;
       let updatedCount = 0;
 
-      await prisma.$transaction(async (tx) => {
-        for (const row of validatedRows) {
-          // Calculate grade, grade point, and PXU
-          const calculation = calculateResult(row.score, row.courseUnit, row.passMark);
+      // Process in smaller batches to avoid transaction timeout
+      const BATCH_SIZE = 50;
+      for (let i = 0; i < validatedRows.length; i += BATCH_SIZE) {
+        const batch = validatedRows.slice(i, i + BATCH_SIZE);
+        
+        await prisma.$transaction(async (tx) => {
+          for (const row of batch) {
+            // Calculate grade, grade point, and PXU
+            const calculation = calculateResult(row.score, row.courseUnit, row.passMark);
 
-          // Upsert result
-          const existing = await tx.result.findUnique({
-            where: {
-              studentId_courseId_academicYear: {
+            // Upsert result
+            const existing = await tx.result.findUnique({
+              where: {
+                studentId_courseId_academicYear: {
+                  studentId: row.studentId,
+                  courseId: row.courseId,
+                  academicYear: row.academicYear,
+                },
+              },
+            });
+
+            await tx.result.upsert({
+              where: {
+                studentId_courseId_academicYear: {
+                  studentId: row.studentId,
+                  courseId: row.courseId,
+                  academicYear: row.academicYear,
+                },
+              },
+              create: {
                 studentId: row.studentId,
                 courseId: row.courseId,
+                score: row.score,
+                grade: calculation.grade,
+                gradePoint: calculation.gradePoint,
+                pxu: calculation.pxu,
+                isCarryOver: calculation.isCarryOver,
+                level: row.level,
+                semester: row.semesterEnum,
                 academicYear: row.academicYear,
               },
-            },
-          });
-
-          await tx.result.upsert({
-            where: {
-              studentId_courseId_academicYear: {
-                studentId: row.studentId,
-                courseId: row.courseId,
-                academicYear: row.academicYear,
+              update: {
+                score: row.score,
+                grade: calculation.grade,
+                gradePoint: calculation.gradePoint,
+                pxu: calculation.pxu,
+                isCarryOver: calculation.isCarryOver,
               },
-            },
-            create: {
-              studentId: row.studentId,
-              courseId: row.courseId,
-              score: row.score,
-              grade: calculation.grade,
-              gradePoint: calculation.gradePoint,
-              pxu: calculation.pxu,
-              isCarryOver: calculation.isCarryOver,
-              level: row.level,
-              semester: row.semesterEnum,
-              academicYear: row.academicYear,
-            },
-            update: {
-              score: row.score,
-              grade: calculation.grade,
-              gradePoint: calculation.gradePoint,
-              pxu: calculation.pxu,
-              isCarryOver: calculation.isCarryOver,
-            },
-          });
+            });
 
-          if (existing) {
-            updatedCount++;
-          } else {
-            successCount++;
+            if (existing) {
+              updatedCount++;
+            } else {
+              successCount++;
+            }
+
+            affectedStudentIds.add(row.studentId);
           }
-
-          affectedStudentIds.add(row.studentId);
-        }
-      });
+        }, {
+          timeout: 30000, // 30 seconds timeout
+        });
+      }
 
       // Recalculate GPA for all affected students (outside transaction for performance)
       const affectedStudentsArray = Array.from(affectedStudentIds);
