@@ -13,13 +13,15 @@ import { Modal } from '@/components/ui/Modal';
 import { studentsApi } from '@/lib/api';
 import { Student } from '@/types';
 import { formatLevel, LEVELS } from '@/lib/utils';
+import BulkLevelUpdate from '@/components/BulkLevelUpdate';
 import { 
   PlusIcon, 
   PencilIcon, 
   TrashIcon, 
   EyeIcon,
   CloudArrowUpIcon,
-  MagnifyingGlassIcon
+  MagnifyingGlassIcon,
+  ArrowUpCircleIcon
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
@@ -32,6 +34,7 @@ export default function StudentsPage() {
   const [levelFilter, setLevelFilter] = useState('');
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [showBulkUpdate, setShowBulkUpdate] = useState(false);
   const limit = 20;
 
   const fetchStudents = useCallback(async () => {
@@ -135,6 +138,10 @@ export default function StudentsPage() {
         <div className="flex gap-3">
           {user?.role === 'HOD' && (
             <>
+              <Button variant="outline" onClick={() => setShowBulkUpdate(!showBulkUpdate)}>
+                <ArrowUpCircleIcon className="h-5 w-5 mr-2" />
+                {showBulkUpdate ? 'Hide' : 'Bulk Update Level'}
+              </Button>
               <Link href="/students/upload">
                 <Button variant="outline">
                   <CloudArrowUpIcon className="h-5 w-5 mr-2" />
@@ -151,6 +158,13 @@ export default function StudentsPage() {
           )}
         </div>
       </div>
+
+      {showBulkUpdate && (
+        <Card>
+          <h3 className="text-lg font-semibold mb-4">Bulk Update Student Levels</h3>
+          <BulkLevelUpdate students={students} onSuccess={() => { fetchStudents(); setShowBulkUpdate(false); }} />
+        </Card>
+      )}
 
       <Card>
         <div className="flex flex-wrap gap-4 mb-4">
