@@ -101,6 +101,16 @@ export class StudentController {
       next(error);
     }
   }
+
+  async bulkUpdateLevel(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { studentIds, newLevel } = req.body;
+      const count = await studentService.bulkUpdateLevel(studentIds, newLevel);
+      sendSuccess(res, { count }, `Successfully updated ${count} students to ${newLevel}`);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const studentController = new StudentController();

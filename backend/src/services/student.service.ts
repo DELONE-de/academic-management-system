@@ -183,6 +183,18 @@ export class StudentService {
 
     return students;
   }
+
+  /**
+   * Bulk update student levels
+   */
+  async bulkUpdateLevel(studentIds: string[], newLevel: Level): Promise<number> {
+    const result = await prisma.student.updateMany({
+      where: { id: { in: studentIds } },
+      data: { currentLevel: newLevel },
+    });
+
+    return result.count;
+  }
 }
 
 export const studentService = new StudentService();

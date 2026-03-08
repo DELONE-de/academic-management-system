@@ -74,4 +74,11 @@ router.delete('/:id', authorize('HOD'), studentController.delete);
  */
 router.get('/department/:departmentId/level/:level', studentController.getByDepartmentLevel);
 
+/**
+ * @route   PATCH /api/students/bulk-update-level
+ * @desc    Bulk update student levels
+ * @access  HOD only
+ */
+router.patch('/bulk-update-level', authorize('HOD'), studentController.bulkUpdateLevel);
+
 export default router;
