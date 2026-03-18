@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import api from '@/lib/api';
 
 const LEVELS = ['ND1', 'ND2', 'HND1', 'HND2', 'LEVEL_100', 'LEVEL_200', 'LEVEL_300', 'LEVEL_400', 'LEVEL_500'];
 
@@ -23,21 +24,14 @@ export default function BulkLevelUpdate({ students, onSuccess }: { students: any
 
   const handleSubmit = async () => {
     if (!newLevel || selectedIds.length === 0) {
-      alert('Select students and new level');
+      alert('Select students and a new level');
       return;
     }
 
     setLoading(true);
     try {
-      const res = await fetch('/api/students/bulk-update-level', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentIds: selectedIds, newLevel }),
-      });
-
-      if (!res.ok) throw new Error('Failed to update');
-
-      alert(`Updated ${selectedIds.length} students`);
+      await api.patch('/students/bulk-update-level', { studentIds: selectedIds, newLevel });
+      alert(`Updated ${selectedIds.length} student${selectedIds.length !== 1 ? 's' : ''}`);
       setSelectedIds([]);
       setNewLevel('');
       onSuccess();
