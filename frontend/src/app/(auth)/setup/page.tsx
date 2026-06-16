@@ -22,7 +22,7 @@ const departmentSchema = z.object({
   name: z.string().min(3, 'Name is required'),
   code: z.string().min(2, 'Code is required').max(10),
   facultyId: z.string().min(1, 'Faculty is required'),
-  passMark: z.number().min(1).max(100).default(40),
+  passMark: z.number().min(1).max(100),
   description: z.string().optional(),
 });
 
