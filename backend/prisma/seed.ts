@@ -1,7 +1,6 @@
 // prisma/seed.ts
 
-import { PrismaClient, UserRole } from '@prisma/client';
-import bcrypt from 'bcryptjs';
+import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -126,21 +125,6 @@ async function main() {
   });
 
   console.log('✅ Created departments and faculty');
-
-  // Create Users (HOD and DEAN)
-  const hashedPassword = await bcrypt.hash('password123', 10);
-
-  // Dean for BMS Faculty
-  await prisma.user.create({
-    data: {
-      email: 'dean.science@university.edu.ng',
-      password: hashedPassword,
-      firstName: 'Adebayo',
-      lastName: 'Ogundimu',
-      role: UserRole.DEAN,
-      facultyId: facultybms.id,
-    },
-  });
 
   console.log('🌱 Creating courses...');
 
@@ -630,7 +614,6 @@ async function main() {
   });
 
   console.log('✅ Created students');
-  console.log('✅ Created users');
   console.log('🎉 Database seeding completed successfully!');
 }
 

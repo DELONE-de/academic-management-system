@@ -240,8 +240,32 @@ export const departmentsApi = {
     const response = await api.get<ApiResponse>('/departments/public');
     return response.data;
   },
+  createPublic: async (data: { name: string; code: string; description?: string; passMark?: number; facultyId: string }) => {
+    const response = await api.post<ApiResponse>('/departments/public', data);
+    return response.data;
+  },
+  deletePublic: async (id: string) => {
+    const response = await api.delete<ApiResponse>(`/departments/public/${id}`);
+    return response.data;
+  },
   getById: async (id: string) => {
     const response = await api.get<ApiResponse>(`/departments/${id}`);
+    return response.data;
+  },
+};
+
+// Faculties API
+export const facultiesApi = {
+  getAllPublic: async () => {
+    const response = await api.get<ApiResponse>('/faculties/public');
+    return response.data;
+  },
+  createPublic: async (data: { name: string; code: string; description?: string }) => {
+    const response = await api.post<ApiResponse>('/faculties/public', data);
+    return response.data;
+  },
+  deletePublic: async (id: string) => {
+    const response = await api.delete<ApiResponse>(`/faculties/public/${id}`);
     return response.data;
   },
 };

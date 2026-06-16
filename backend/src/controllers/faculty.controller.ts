@@ -6,6 +6,20 @@ import { sendSuccess } from '../utils/response.js';
 import { AuthRequest } from '../types/index.js';
 
 export class FacultyController {
+  async create(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const faculty = await facultyService.create(req.body);
+      sendSuccess(res, faculty, 'Faculty created successfully');
+    } catch (error) { next(error); }
+  }
+
+  async remove(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      await facultyService.delete(req.params.id);
+      sendSuccess(res, null, 'Faculty deleted successfully');
+    } catch (error) { next(error); }
+  }
+
   async findAll(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const faculties = await facultyService.findAll();

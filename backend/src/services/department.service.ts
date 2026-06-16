@@ -7,6 +7,24 @@ export class DepartmentService {
   /**
    * Gets all departments
    */
+  async create(data: { name: string; code: string; description?: string; passMark?: number; facultyId: string }): Promise<any> {
+    const existing = await prisma.department.findFirst({
+      where: { OR: [{ code: data.code.toUpperCase() }, { name: data.name, facultyId: data.facultyId }] },
+    });
+    if (existing) throw new AppError('Department with this code or name already exists in this faculty', 400);
+
+    return prisma.department.create({
+      data: { ...data, code: data.code.toUpperCase() },
+      include: { faculty: { select: { id: true, name: true, code: true } } },
+    });
+  }
+
+  async delete(id: string): Promise<void> {
+    const dept = await prisma.department.findUnique({ where: { id } });
+    if (!dept) throw new AppError('Department not found', 404);
+    await prisma.department.delete({ where: { id } });
+  }
+
   async findAll(facultyId?: string): Promise<any[]> {
     const where = facultyId ? { facultyId } : {};
 

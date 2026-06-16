@@ -12,6 +12,8 @@ const router = Router();
  * @access  Public
  */
 router.get('/public', departmentController.findAllPublic);
+router.post('/public', departmentController.create);
+router.delete('/public/:id', departmentController.remove);
 
 router.use(authenticate);
 
@@ -27,6 +29,7 @@ router.get('/', departmentController.findAll);
  * @desc    Get current user's department (HOD)
  * @access  HOD
  */
+// NOTE: must be before /:id to avoid being matched as id="my-department"
 router.get('/my-department', departmentController.getMyDepartment);
 
 /**

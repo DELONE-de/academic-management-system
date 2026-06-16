@@ -6,6 +6,11 @@ import { authenticate } from '../middleware/auth.middleware.js';
 
 const router = Router();
 
+// Public routes for setup (no auth required)
+router.get('/public', facultyController.findAll);
+router.post('/public', facultyController.create);
+router.delete('/public/:id', facultyController.remove);
+
 router.use(authenticate);
 
 /**

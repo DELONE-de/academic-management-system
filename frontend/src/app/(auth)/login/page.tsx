@@ -102,25 +102,22 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="mt-6 text-center">
+          <div className="mt-6 text-center space-y-2">
             <p className="text-sm text-gray-600">
               Don't have an account?{' '}
               <a href="/signup" className="text-primary-600 hover:text-primary-700 font-medium">
                 Sign up
               </a>
             </p>
+            <p className="text-sm text-gray-600">
+              First time?{' '}
+              <a href="/setup" className="text-primary-600 hover:text-primary-700 font-medium">
+                Set up faculties & departments
+              </a>
+            </p>
           </div>
 
-          <div className="mt-6 border-t border-gray-200 pt-6">
-            <p className="text-center text-sm text-gray-500">
-              Demo Credentials:
-            </p>
-            <div className="mt-2 text-center text-xs text-gray-400 space-y-1">
-              <p>HOD HIM: hod.him@university.edu.ng / password123</p>
-              <p>HOD ITH: hod.ith@university.edu.ng / password123</p>
-              <p>Dean: dean.science@university.edu.ng / password123</p>
-            </div>
-          </div>
+
         </div>
       </div>
     </div>

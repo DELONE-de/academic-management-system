@@ -6,6 +6,20 @@ import { sendSuccess } from '../utils/response.js';
 import { AuthRequest } from '../types/index.js';
 
 export class DepartmentController {
+  async create(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const department = await departmentService.create(req.body);
+      sendSuccess(res, department, 'Department created successfully');
+    } catch (error) { next(error); }
+  }
+
+  async remove(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      await departmentService.delete(req.params.id);
+      sendSuccess(res, null, 'Department deleted successfully');
+    } catch (error) { next(error); }
+  }
+
   async findAllPublic(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const departments = await departmentService.findAll();

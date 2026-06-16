@@ -78,7 +78,11 @@ export class ReportController {
     next: NextFunction
   ): Promise<void> {
     try {
-      const facultyId = req.user!.facultyId!;
+      const facultyId = req.user!.facultyId;
+      if (!facultyId) {
+        res.status(400).json({ success: false, message: 'No faculty assigned to this user' });
+        return;
+      }
       const { academicYear } = req.query;
 
       const stats = await reportService.getFacultyStats(

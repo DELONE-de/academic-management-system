@@ -195,6 +195,10 @@ export class ReportService {
     facultyId: string,
     academicYear?: string
   ): Promise<any> {
+    if (!facultyId) {
+      throw new AppError('Faculty ID is required', 400);
+    }
+
     const faculty = await prisma.faculty.findUnique({
       where: { id: facultyId },
       include: {
