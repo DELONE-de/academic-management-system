@@ -1,6 +1,6 @@
 // src/config/jwt.ts
 
-import jwt from 'jsonwebtoken';
+import jwt, { type SignOptions } from 'jsonwebtoken';
 import { JWTPayload } from '../types/index.js';
 
 // Get JWT configuration from environment
@@ -14,7 +14,7 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
  */
 export function generateToken(payload: JWTPayload): string {
   return jwt.sign(payload, JWT_SECRET, {
-    expiresIn: JWT_EXPIRES_IN,
+    expiresIn: JWT_EXPIRES_IN as SignOptions['expiresIn'],
   });
 }
 

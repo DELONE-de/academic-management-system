@@ -116,6 +116,21 @@ export function getClassOfDegree(cgpa: number): string {
 }
 
 /**
+ * Gets a remark string for a grade
+ */
+export function getGradeRemark(grade: Grade): string {
+  const remarks: Record<Grade, string> = {
+    A: 'Excellent',
+    B: 'Good',
+    C: 'Average',
+    D: 'Below Average',
+    E: 'Poor',
+    F: 'Fail',
+  };
+  return remarks[grade];
+}
+
+/**
  * Formats level for display
  */
 export function formatLevel(level: Level): string {

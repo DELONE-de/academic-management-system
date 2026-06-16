@@ -190,6 +190,45 @@ export interface DeleteScoreResult {
   gpaRecalculated: boolean;
 }
 
+// Report Types
+export interface DepartmentStats {
+  departmentId?: string;
+  departmentName?: string;
+  totalStudents: number;
+  highestGpa: number;
+  lowestGpa: number;
+  averageGpa: number;
+  carryOverCount: number;
+  passRate: number;
+}
+
+export interface StudentResultRow {
+  courseCode: string;
+  courseTitle: string;
+  unit: number;
+  score: number;
+  grade: string;
+  gradePoint: number;
+  pxu: number;
+  isCarryOver: boolean;
+}
+
+export interface StudentResult {
+  serialNumber: number;
+  studentId?: string;
+  matricNumber: string;
+  studentName: string;
+  level: string;
+  semester: string;
+  academicYear: string;
+  gpa: number;
+  cgpa?: number;
+  totalUnits?: number;
+  totalPoints?: number;
+  carryOverCount?: number;
+  results: StudentResultRow[];
+}
+
 // GPA Recalculation Types
 export interface GPARecalculationResult {
   studentId: string;

@@ -2,7 +2,7 @@
 
 import PDFDocument from 'pdfkit';
 import { Response } from 'express';
-import { DepartmentStats, StudentResult } from '../types/index.js';
+import { DepartmentStats, StudentResult, StudentResultRow } from '../types/index.js';
 import { formatLevel, formatSemester, getClassOfDegree, getGradeRemark } from './grading.js';
 
 /**
@@ -118,7 +118,7 @@ export async function generateDepartmentReportPDF(
 
     // Course rows
     if (student.results && student.results.length > 0) {
-      student.results.forEach((result) => {
+      student.results.forEach((result: StudentResultRow) => {
         if (yPos > 750) {
           doc.addPage();
           yPos = 50;

@@ -4,14 +4,14 @@ import { Level, Semester } from '@prisma/client';
 import { prisma } from '../config/database.js';
 import { AppError } from '../middleware/error.middleware.js';
 import { calculateResult } from '../utils/grading.js';
-import { BulkScoreEntryInput, AddScoreInput, DeleteScoreResult } from '../types/index.js';
+import { BulkScoreEntry, AddScoreInput, DeleteScoreResult } from '../types/index.js';
 import { gpaService } from './gpa.service.js';
 
 export class ResultService {
   /**
    * Enter scores for multiple students (bulk entry - existing method)
    */
-  async enterScores(input: BulkScoreEntryInput, departmentId: string): Promise<any> {
+  async enterScores(input: BulkScoreEntry, departmentId: string): Promise<any> {
     const { level, semester, academicYear, scores } = input;
 
     const department = await prisma.department.findUnique({

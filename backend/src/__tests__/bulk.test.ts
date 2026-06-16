@@ -1,7 +1,7 @@
 import request from 'supertest';
 import XLSX from 'xlsx';
-import app from '../app';
-import { prisma } from '../config/database';
+import app from '../app.js';
+import { prisma } from '../config/database.js';
 
 describe('Bulk Upload Endpoints', () => {
   let authToken: string;
