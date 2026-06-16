@@ -15,7 +15,7 @@ import { Course } from '@/types';
 const courseSchema = z.object({
   code: z.string().min(3, 'Course code is required').toUpperCase(),
   title: z.string().min(5, 'Course title is required'),
-  unit: z.coerce.number().min(1).max(6, 'Unit must be between 1 and 6'),
+  unit: z.number().min(1).max(6, 'Unit must be between 1 and 6'),
   level: z.string().min(1, 'Level is required'),
   semester: z.string().min(1, 'Semester is required'),
   isElective: z.boolean().optional(),
@@ -69,7 +69,7 @@ export function CourseForm({ course, onSubmit, onCancel, isLoading }: CourseForm
           min={1}
           max={6}
           error={errors.unit?.message}
-          {...register('unit')}
+          {...register('unit', { valueAsNumber: true })}
           required
         />
       </div>
