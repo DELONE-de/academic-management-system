@@ -5,8 +5,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ============================================
@@ -16,6 +17,8 @@ datasource db {
 enum UserRole {
   HOD
   DEAN
+  LECTURER
+  EXAMINATION_OFFICER
 }
 
 enum Semester {
@@ -44,6 +47,36 @@ enum Grade {
   F
 }
 
+enum UploadStatus {
+  PENDING
+  PROCESSING
+  NEEDS_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum ApprovalStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED_BY_EXAM_OFFICER
+  APPROVED_BY_HOD
+  APPROVED_BY_DEAN
+  REJECTED
+  PUBLISHED
+}
+
+enum AuditAction {
+  UPLOAD_CREATED
+  UPLOAD_PROCESSED
+  REVIEW_ACCEPTED
+  REVIEW_REJECTED
+  REVIEW_EDITED
+  RESULT_SUBMITTED
+  RESULT_APPROVED
+  RESULT_REJECTED
+  RESULT_PUBLISHED
+}
+
 // ============================================
 // MODELS
 // ============================================
@@ -54,11 +87,11 @@ model Faculty {
   name        String       @unique
   code        String       @unique
   description String?
-  
+
   // Relations
   departments Department[]
   users       User[]       @relation("FacultyDean")
-  
+
   // Timestamps
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
@@ -72,15 +105,17 @@ model Department {
   name        String
   code        String   @unique
   description String?
-  passMark    Int      @default(40) // Varies per department
-  
+  passMark    Int      @default(40)
+
   // Relations
-  facultyId   String
-  faculty     Faculty  @relation(fields: [facultyId], references: [id], onDelete: Cascade)
-  students    Student[]
-  courses     Course[]
-  users       User[]   @relation("DepartmentHOD")
-  
+  facultyId     String
+  faculty       Faculty       @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  students      Student[]
+  courses       Course[]
+  users         User[]        @relation("DepartmentHOD")
+  uploadJobs    UploadJob[]
+  resultBatches ResultBatch[]
+
   // Timestamps
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -89,53 +124,60 @@ model Department {
   @@map("departments")
 }
 
-/// User model - represents HOD or DEAN
+/// User model - represents any system user
 model User {
-  id           String      @id @default(cuid())
-  email        String      @unique
-  password     String
-  firstName    String
-  lastName     String
-  role         UserRole
-  isActive     Boolean     @default(true)
-  
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  firstName String
+  lastName  String
+  role      UserRole
+  isActive  Boolean  @default(true)
+
   // Conditional relations based on role
   departmentId String?
   department   Department? @relation("DepartmentHOD", fields: [departmentId], references: [id], onDelete: SetNull)
-  
-  facultyId    String?
-  faculty      Faculty?    @relation("FacultyDean", fields: [facultyId], references: [id], onDelete: SetNull)
-  
+
+  facultyId String?
+  faculty   Faculty? @relation("FacultyDean", fields: [facultyId], references: [id], onDelete: SetNull)
+
+  // AI pipeline relations
+  uploadJobs       UploadJob[]     @relation("UploadedBy")
+  resolvedItems    ReviewItem[]    @relation("ResolvedBy")
+  submittedBatches ResultBatch[]   @relation("SubmittedBy")
+  approvals        BatchApproval[] @relation("ApprovedBy")
+  auditLogs        AuditLog[]      @relation("AuditActor")
+
   // Timestamps
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  lastLogin    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  lastLogin DateTime?
 
   @@map("users")
 }
 
 /// Student model - represents a student in a department
 model Student {
-  id              String    @id @default(cuid())
-  matricNumber    String    @unique
-  firstName       String
-  lastName        String
-  middleName      String?
-  email           String?   @unique
-  phone           String?
-  currentLevel    Level
-  admissionYear   Int
-  isActive        Boolean   @default(true)
-  
+  id            String  @id @default(cuid())
+  matricNumber  String  @unique
+  firstName     String
+  lastName      String
+  middleName    String?
+  email         String? @unique
+  phone         String?
+  currentLevel  Level
+  admissionYear Int
+  isActive      Boolean @default(true)
+
   // Relations
-  departmentId    String
-  department      Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  results         Result[]
-  semesterGpas    SemesterGPA[]
-  
+  departmentId String
+  department   Department  @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  results      Result[]
+  semesterGpas SemesterGPA[]
+
   // Timestamps
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([departmentId, currentLevel])
   @@map("students")
@@ -143,23 +185,23 @@ model Student {
 
 /// Course model - represents a course offered in a department
 model Course {
-  id           String     @id @default(cuid())
-  code         String
-  title        String
-  unit         Int        // Credit units (1-6 typically)
-  level        Level
-  semester     Semester
-  isElective   Boolean    @default(false)
-  description  String?
-  
+  id          String   @id @default(cuid())
+  code        String
+  title       String
+  unit        Int
+  level       Level
+  semester    Semester
+  isElective  Boolean  @default(false)
+  description String?
+
   // Relations
   departmentId String
   department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
   results      Result[]
-  
+
   // Timestamps
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([code, departmentId])
   @@index([departmentId, level, semester])
@@ -168,27 +210,27 @@ model Course {
 
 /// Result model - stores individual course results for students
 model Result {
-  id           String     @id @default(cuid())
-  score        Float      // Raw score (0-100)
-  grade        Grade      // Calculated grade
-  gradePoint   Int        // Points (0-5)
-  pxu          Float      // Point × Unit
-  isCarryOver  Boolean    @default(false) // True if score < passMark
-  
+  id          String   @id @default(cuid())
+  score       Float
+  grade       Grade
+  gradePoint  Int
+  pxu         Float
+  isCarryOver Boolean  @default(false)
+
   // Academic period
   level        Level
   semester     Semester
-  academicYear String     // e.g., "2023/2024"
-  
+  academicYear String
+
   // Relations
-  studentId    String
-  student      Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  courseId     String
-  course       Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId  String
+  course    Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
   // Timestamps
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([studentId, courseId, academicYear])
   @@index([studentId, level, semester])
@@ -197,29 +239,135 @@ model Result {
 
 /// SemesterGPA model - stores GPA for historical reference
 model SemesterGPA {
-  id           String     @id @default(cuid())
-  gpa          Float      // Semester GPA (0.00 - 5.00)
-  totalUnits   Int        // Total credit units for semester
-  totalPoints  Float      // Total quality points
-  
+  id          String @id @default(cuid())
+  gpa         Float
+  totalUnits  Int
+  totalPoints Float
+
   // Academic period
   level        Level
   semester     Semester
-  academicYear String     // e.g., "2023/2024"
-  
-  // Cumulative calculations (for CGPA tracking)
-  cumulativeGpa   Float?     // CGPA up to this point
-  cumulativeUnits Int?       // Total units up to this point
-  
+  academicYear String
+
+  // Cumulative calculations
+  cumulativeGpa   Float?
+  cumulativeUnits Int?
+
   // Relations
-  studentId    String
-  student      Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
   // Timestamps
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([studentId, level, semester, academicYear])
   @@index([studentId])
   @@map("semester_gpas")
+}
+
+/// UploadJob model - tracks an AI-processed file upload
+model UploadJob {
+  id            String       @id @default(cuid())
+  fileName      String
+  fileType      String       // excel | csv | pdf | image
+  status        UploadStatus @default(PENDING)
+  uploadedById  String
+  uploadedBy    User         @relation("UploadedBy", fields: [uploadedById], references: [id])
+  departmentId  String
+  department    Department   @relation(fields: [departmentId], references: [id])
+  totalRows     Int          @default(0)
+  issuesFound   Int          @default(0)
+  issuesFixed   Int          @default(0)
+  issuesPending Int          @default(0)
+  aiSummary     String?
+  rawRecords    Json?        // extracted records stored for commit step
+  academicYear  String?      // selected before upload
+  reviewItems   ReviewItem[]
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("upload_jobs")
+}
+
+/// ReviewItem model - a single flagged record from an upload job
+model ReviewItem {
+  id             String    @id @default(cuid())
+  uploadJobId    String
+  uploadJob      UploadJob @relation(fields: [uploadJobId], references: [id], onDelete: Cascade)
+  rowNumber      Int
+  field          String
+  originalValue  String?
+  suggestedValue String?
+  confidence     Float     // 0.0 - 1.0
+  issueType      String    // duplicate | invalid_score | missing_student | wrong_course | unregistered
+  issueDetail    String
+  rawRecord      Json?     // full student row for commit step
+  isResolved     Boolean   @default(false)
+  resolution     String?   // accepted | rejected | edited
+  resolvedById   String?
+  resolvedBy     User?     @relation("ResolvedBy", fields: [resolvedById], references: [id])
+  resolvedAt     DateTime?
+
+  // Timestamps
+  createdAt DateTime @default(now())
+
+  @@map("review_items")
+}
+
+/// ResultBatch model - a set of results pending approval
+model ResultBatch {
+  id           String         @id @default(cuid())
+  departmentId String
+  department   Department     @relation(fields: [departmentId], references: [id])
+  level        Level
+  semester     Semester
+  academicYear String
+  status       ApprovalStatus @default(DRAFT)
+  submittedById String
+  submittedBy  User           @relation("SubmittedBy", fields: [submittedById], references: [id])
+  approvals    BatchApproval[]
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("result_batches")
+}
+
+/// BatchApproval model - one step in the approval chain
+model BatchApproval {
+  id         String         @id @default(cuid())
+  batchId    String
+  batch      ResultBatch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  approverId String
+  approver   User           @relation("ApprovedBy", fields: [approverId], references: [id])
+  role       UserRole
+  status     ApprovalStatus
+  comment    String?
+
+  // Timestamps
+  createdAt DateTime @default(now())
+
+  @@map("batch_approvals")
+}
+
+/// AuditLog model - append-only activity log
+model AuditLog {
+  id         String      @id @default(cuid())
+  action     AuditAction
+  entityType String
+  entityId   String
+  actorId    String
+  actor      User        @relation("AuditActor", fields: [actorId], references: [id])
+  meta       Json?
+
+  // Timestamps
+  createdAt DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@map("audit_logs")
 }

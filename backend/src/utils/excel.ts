@@ -4,7 +4,6 @@ import * as XLSX from 'xlsx';
 import { 
   StudentImportRow, 
   StudentImportError, 
-  ScoreImportRow, 
   ScoreImportError 
 } from '../types/index.js';
 
@@ -73,45 +72,61 @@ export function parseStudentRows(data: any[]): StudentImportRow[] {
 }
 
 /**
- * Parse score rows from Excel data (horizontal format)
+ * Parse score rows from Excel data.
+ * Format: | MatricNumber | GST111 | GST112 | COS101 | ... |
+ * MatricNumber format: 2025/5337 (year/number only)
+ * academicYear comes from the request (pre-upload selector) — not from the file.
+ * departmentCode comes from the authenticated user — not from the file.
  */
-export function parseScoreRows(data: any[]): ScoreImportRow[] {
-  const rows: ScoreImportRow[] = [];
-  
-  data.forEach((row, index) => {
-    const matricNumber = getRowValue(row, ['matricnumber', 'matricno', 'matric']).toUpperCase();
-    const academicYear = getRowValue(row, ['academicyear', 'academic_year', 'session', 'year']);
-    
-    if (!matricNumber || !academicYear) {
-      return; // Skip rows without matric number or academic year
-    }
-    
-    // Extract all course columns (any column that's not MatricNumber or AcademicYear)
-    Object.keys(row).forEach(key => {
-      const normalizedKey = normalizeColumnName(key);
-      if (!normalizedKey.includes('matric') && !normalizedKey.includes('academic') && 
-          !normalizedKey.includes('year') && !normalizedKey.includes('session')) {
+export function parseScoreRows(
+  data: any[],
+  academicYear?: string
+): Array<{
+  rowNumber: number;
+  matricNumber: string;
+  academicYear: string;
+  courses: Array<{ courseCode: string; score: number; confidence: number }>;
+  overallConfidence: number;
+}> {
+  const SKIP_KEYS = ['matric', 'academic', 'year', 'session', 'dept', 'department'];
+
+  return data
+    .map((row, index) => {
+      const matricNumber = getRowValue(row, ['matricnumber', 'matricno', 'matric']).toUpperCase();
+      const resolvedYear = academicYear ?? getRowValue(row, ['academicyear', 'academic_year', 'session', 'year']);
+
+      if (!matricNumber || !resolvedYear) return null;
+
+      const courses: Array<{ courseCode: string; score: number; confidence: number }> = [];
+
+      for (const key of Object.keys(row)) {
+        const normalizedKey = normalizeColumnName(key);
+        if (SKIP_KEYS.some((k) => normalizedKey.includes(k))) continue;
+
         const scoreValue = String(row[key]).trim();
-        if (scoreValue && scoreValue !== '') {
-          const score = parseFloat(scoreValue);
-          if (!isNaN(score) && score >= 0) {
-            rows.push({
-              rowNumber: index + 2,
-              matricNumber,
-              departmentCode: '',
-              courseCode: key.toUpperCase().trim(),
-              score,
-              studentLevel: '',
-              semester: '',
-              academicYear,
-            });
-          }
-        }
+        if (!scoreValue) continue;
+
+        const score = parseFloat(scoreValue);
+        if (isNaN(score)) continue;
+
+        courses.push({
+          courseCode: key.toUpperCase().trim(),
+          score,
+          confidence: score >= 0 && score <= 100 ? 1.0 : 0.3,
+        });
       }
-    });
-  });
-  
-  return rows;
+
+      if (courses.length === 0) return null;
+
+      return {
+        rowNumber: index + 2,
+        matricNumber,
+        academicYear: resolvedYear,
+        courses,
+        overallConfidence: Math.min(...courses.map((c) => c.confidence)),
+      };
+    })
+    .filter(Boolean) as any[];
 }
 
 /**
@@ -237,50 +252,26 @@ export function generateStudentTemplate(): Buffer {
   return Buffer.from(XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }));
 }
 
-/**
- * Generate score upload template
- */
 export function generateScoreTemplate(): Buffer {
   const sampleData = [
-    {
-      'MatricNumber': 'CSC/2023/001',
-      'CSC101': 75,
-      'CSC103': 68,
-      'MTH101': 82,
-      'PHY101': 70,
-      'GST101': 65,
-      'AcademicYear': '2023/2024',
-    },
-    {
-      'MatricNumber': 'CSC/2023/002',
-      'CSC101': 80,
-      'CSC103': 72,
-      'MTH101': 85,
-      'PHY101': 75,
-      'GST101': 70,
-      'AcademicYear': '2023/2024',
-    },
+    { 'MatricNumber': '2024/0001', 'GST 111': 72, 'GST 112': 65, 'COS 101': 80, 'BIO 101': 55, 'MTH 101': 68 },
+    { 'MatricNumber': '2024/0002', 'GST 111': 45, 'GST 112': 88, 'COS 101': 60, 'BIO 101': 101, 'MTH 101': 70 }, // score > 100 intentional error
+    { 'MatricNumber': '2024/0001', 'GST 111': 72, 'GST 112': 65, 'COS 101': 80, 'BIO 101': 55, 'MTH 101': 68 }, // duplicate intentional error
   ];
 
   const workbook = XLSX.utils.book_new();
   const worksheet = XLSX.utils.json_to_sheet(sampleData);
-  
   worksheet['!cols'] = [
-    { wch: 18 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 12 },
+    { wch: 14 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 12 },
   ];
-
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Scores');
-  
-  // Add instructions sheet
+
   const instructionsData = [
-    { 'Field': 'MatricNumber', 'Description': 'Student matriculation number (first column)', 'Required': 'Yes' },
-    { 'Field': 'Course Codes', 'Description': 'Each course code as a column header (e.g., CSC101, MTH101). Put scores under each course.', 'Required': 'Yes' },
-    { 'Field': 'AcademicYear', 'Description': 'Academic year in last column (e.g., 2023/2024)', 'Required': 'Yes' },
-    { 'Field': 'Note', 'Description': 'Leave cell empty if student did not take that course. Course codes must match exactly.', 'Required': '-' },
+    { 'Column': 'MatricNumber', 'Description': 'Student matric number in format YYYY/NNNN e.g. 2025/5337', 'Required': 'Yes' },
+    { 'Column': 'Course Codes', 'Description': 'One column per course (e.g. GST 111). Header = course code. Cell = score (0-100). Leave blank if student did not sit the course.', 'Required': 'Yes' },
+    { 'Column': 'AcademicYear', 'Description': 'NOT required in file — selected before upload in the UI.', 'Required': 'No' },
   ];
-  
-  const instructionsSheet = XLSX.utils.json_to_sheet(instructionsData);
-  XLSX.utils.book_append_sheet(workbook, instructionsSheet, 'Instructions');
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(instructionsData), 'Instructions');
 
   return Buffer.from(XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }));
 }

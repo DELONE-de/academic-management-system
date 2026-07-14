@@ -15,7 +15,7 @@ import {
   DocumentChartBarIcon,
   AcademicCapIcon,
   CloudArrowUpIcon,
-  PlusCircleIcon,
+  CheckBadgeIcon,
 } from '@heroicons/react/24/outline';
 import { cn } from '@/lib/utils';
 
@@ -23,16 +23,8 @@ const hodNavItems = [
   { href: '/dashboard', label: 'Dashboard', icon: HomeIcon },
   { href: '/students', label: 'Students', icon: UserGroupIcon },
   { href: '/courses', label: 'Courses', icon: BookOpenIcon },
-  { 
-    href: '/scores', 
-    label: 'Score Management', 
-    icon: PencilSquareIcon,
-    children: [
-      { href: '/scores/entry', label: 'Manual Entry' },
-      { href: '/scores/upload', label: 'Bulk Upload' },
-      { href: '/scores/manage', label: 'Add/Delete Score' },
-    ]
-  },
+  { href: '/scores/upload', label: 'Upload Scores', icon: CloudArrowUpIcon },
+  { href: '/approval', label: 'Approvals', icon: CheckBadgeIcon },
   { href: '/gpa', label: 'GPA View', icon: ChartBarIcon },
   { href: '/cgpa', label: 'CGPA View', icon: AcademicCapIcon },
   { href: '/reports', label: 'Reports', icon: DocumentChartBarIcon },
@@ -41,6 +33,7 @@ const hodNavItems = [
 const deanNavItems = [
   { href: '/dashboard', label: 'Dashboard', icon: HomeIcon },
   { href: '/departments', label: 'Departments', icon: BookOpenIcon },
+  { href: '/approval', label: 'Approvals', icon: CheckBadgeIcon },
   { href: '/gpa', label: 'GPA Statistics', icon: ChartBarIcon },
   { href: '/reports', label: 'Reports', icon: DocumentChartBarIcon },
 ];
@@ -62,44 +55,20 @@ export function Sidebar() {
       <nav className="space-y-1 flex-1">
         {navItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
-          const hasChildren = 'children' in item && item.children;
-          const isParentActive = hasChildren && (item as any).children?.some((child: any) => pathname === child.href);
-
           return (
-            <div key={item.href}>
-              <Link
-                href={item.href}
-                className={cn(
-                  'flex items-center gap-3 px-4 py-3 rounded-lg transition-colors',
-                  isActive || isParentActive
-                    ? 'bg-primary-600 text-white'
-                    : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-                )}
-              >
-                <item.icon className="h-5 w-5" />
-                {item.label}
-              </Link>
-
-              {/* Sub-navigation for items with children */}
-              {hasChildren && (isActive || isParentActive) && (
-                <div className="ml-8 mt-1 space-y-1">
-                  {(item as any).children?.map((child: any) => (
-                    <Link
-                      key={child.href}
-                      href={child.href}
-                      className={cn(
-                        'block px-4 py-2 text-sm rounded-lg transition-colors',
-                        pathname === child.href
-                          ? 'bg-primary-500 text-white'
-                          : 'text-gray-400 hover:bg-gray-800 hover:text-white'
-                      )}
-                    >
-                      {child.label}
-                    </Link>
-                  ))}
-                </div>
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                'flex items-center gap-3 px-4 py-3 rounded-lg transition-colors',
+                isActive
+                  ? 'bg-primary-600 text-white'
+                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
               )}
-            </div>
+            >
+              <item.icon className="h-5 w-5" />
+              {item.label}
+            </Link>
           );
         })}
       </nav>
@@ -133,11 +102,11 @@ export function Sidebar() {
       <div className="mt-4">
         <div className="bg-gray-800 rounded-lg p-4">
           <p className="text-xs text-gray-400">Logged in as</p>
-          <p className="text-sm font-medium text-white">
-            {user?.role === 'HOD' ? 'Head of Department' : 'Faculty Dean'}
+          <p className="text-sm font-medium text-white capitalize">
+            {user?.role?.replace('_', ' ').toLowerCase()}
           </p>
           <p className="text-xs text-gray-400">
-            {user?.department?.name || user?.faculty?.name}
+            {user?.department?.name || user?.faculty?.name || ''}
           </p>
         </div>
       </div>

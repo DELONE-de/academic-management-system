@@ -1,9 +1,12 @@
 // src/routes/gpa.routes.ts
 
-import { Router } from 'express';
+import { Router, Response } from 'express';
 import { gpaController } from '../controllers/gpa.controller.js';
 import { authenticate, authorize } from '../middleware/auth.middleware.js';
 import { validateBody } from '../middleware/validation.middleware.js';
+import { prisma } from '../config/database.js';
+import { geminiExplainGPA } from '../ai/gemini.js';
+import { AuthRequest } from '../types/index.js';
 import { z } from 'zod';
 
 const router = Router();
@@ -74,5 +77,64 @@ router.post(
  * @access  HOD, DEAN
  */
 router.get('/department/:departmentId/stats', gpaController.getDepartmentGPAStats);
+
+/**
+ * @route   GET /api/gpa/student/:studentId/explain
+ * @desc    AI plain-language explanation of a student's GPA for a semester
+ * @query   level, semester, academicYear
+ */
+router.get('/student/:studentId/explain', async (req: AuthRequest, res: Response) => {
+  const { level, semester, academicYear } = req.query as Record<string, string>;
+
+  if (!level || !semester || !academicYear) {
+    res.status(400).json({ success: false, message: 'level, semester, academicYear are required' });
+    return;
+  }
+
+  const student = await prisma.student.findUnique({
+    where: { id: req.params.studentId },
+    select: { firstName: true, lastName: true, department: { select: { passMark: true } } },
+  });
+
+  if (!student) {
+    res.status(404).json({ success: false, message: 'Student not found' });
+    return;
+  }
+
+  const results = await prisma.result.findMany({
+    where: { studentId: req.params.studentId, level: level as any, semester: semester as any, academicYear },
+    include: { course: { select: { code: true, unit: true } } },
+  });
+
+  if (results.length === 0) {
+    res.status(404).json({ success: false, message: 'No results found for this semester' });
+    return;
+  }
+
+  const semGpa = await prisma.semesterGPA.findUnique({
+    where: { studentId_level_semester_academicYear: { studentId: req.params.studentId, level: level as any, semester: semester as any, academicYear } },
+  });
+
+  const totalUnits = results.reduce((s, r) => s + r.course.unit, 0);
+  const totalPoints = results.reduce((s, r) => s + r.pxu, 0);
+  const gpa = semGpa?.gpa ?? (totalUnits > 0 ? Math.round((totalPoints / totalUnits) * 100) / 100 : 0);
+
+  const explanation = await geminiExplainGPA({
+    studentName: `${student.firstName} ${student.lastName}`,
+    gpa,
+    results: results.map((r) => ({
+      courseCode: r.course.code,
+      unit: r.course.unit,
+      score: r.score,
+      grade: r.grade,
+      gradePoint: r.gradePoint,
+      pxu: r.pxu,
+    })),
+    totalUnits,
+    totalPoints,
+  });
+
+  res.json({ success: true, data: { gpa, explanation } });
+});
 
 export default router;

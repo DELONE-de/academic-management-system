@@ -202,7 +202,81 @@ export const resultsApi = {
   },
 };
 
-// GPA API
+// Approval API
+export const approvalApi = {
+  list: async (status?: string) => {
+    const response = await api.get<ApiResponse>('/approval', { params: status ? { status } : {} });
+    return response.data;
+  },
+  submit: async (data: { departmentId: string; level: string; semester: string; academicYear: string }) => {
+    const response = await api.post<ApiResponse>('/approval', data);
+    return response.data;
+  },
+  approve: async (batchId: string, comment?: string) => {
+    const response = await api.post<ApiResponse>(`/approval/${batchId}/approve`, { comment });
+    return response.data;
+  },
+  reject: async (batchId: string, comment?: string) => {
+    const response = await api.post<ApiResponse>(`/approval/${batchId}/reject`, { comment });
+    return response.data;
+  },
+  publish: async (batchId: string) => {
+    const response = await api.post<ApiResponse>(`/approval/${batchId}/publish`);
+    return response.data;
+  },
+};
+
+// Review API
+export const reviewApi = {
+  getJob: async (jobId: string) => {
+    const response = await api.get<ApiResponse>(`/review/${jobId}`);
+    return response.data;
+  },
+  resolveItem: async (itemId: string, resolution: 'accepted' | 'rejected' | 'edited', correctedValue?: string) => {
+    const response = await api.patch<ApiResponse>(`/review/${itemId}`, { resolution, correctedValue });
+    return response.data;
+  },
+  approveAll: async (jobId: string) => {
+    const response = await api.post<ApiResponse>(`/review/${jobId}/approve-all`);
+    return response.data;
+  },
+};
+
+// AI Upload API (SSE-based)
+export const uploadApi = {
+  uploadResults: (file: File, academicYear: string, departmentId?: string): EventSource => {
+    // Build form data and POST via fetch (EventSource doesn't support POST)
+    // We return a fake EventSource-like object using fetch + ReadableStream
+    throw new Error('Use uploadApi.streamUpload instead');
+  },
+
+  // POST multipart, returns the fetch Response for SSE reading
+  streamUpload: async (
+    file: File,
+    uploadType: 'students' | 'results',
+    academicYear: string,
+    departmentId?: string
+  ): Promise<Response> => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('uploadType', uploadType);
+    formData.append('academicYear', academicYear);
+    if (departmentId) formData.append('departmentId', departmentId);
+
+    return fetch(`${API_URL}/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+  },
+
+  getJob: async (jobId: string) => {
+    const response = await api.get<ApiResponse>(`/upload/${jobId}`);
+    return response.data;
+  },
+};
+
 export const gpaApi = {
   calculateSemesterGPA: async (data: any) => {
     const response = await api.post<ApiResponse>('/gpa/calculate', data);
@@ -254,24 +328,12 @@ export const departmentsApi = {
   },
 };
 
-// Faculties API
-export const facultiesApi = {
-  getAllPublic: async () => {
-    const response = await api.get<ApiResponse>('/faculties/public');
-    return response.data;
-  },
-  createPublic: async (data: { name: string; code: string; description?: string }) => {
-    const response = await api.post<ApiResponse>('/faculties/public', data);
-    return response.data;
-  },
-  deletePublic: async (id: string) => {
-    const response = await api.delete<ApiResponse>(`/faculties/public/${id}`);
-    return response.data;
-  },
-};
-
 // Reports API
 export const reportsApi = {
+  getDashboardStats: async () => {
+    const response = await api.get<ApiResponse>('/reports/dashboard');
+    return response.data;
+  },
   getDepartmentReport: async (departmentId: string, params: any) => {
     const response = await api.get<ApiResponse>(`/reports/department/${departmentId}`, { params });
     return response.data;

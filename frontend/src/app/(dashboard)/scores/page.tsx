@@ -7,10 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Card } from '@/components/ui/Card';
 import Link from 'next/link';
 import { 
-  PencilSquareIcon, 
-  CloudArrowUpIcon, 
-  PlusCircleIcon,
-  DocumentTextIcon 
+  CloudArrowUpIcon,
 } from '@heroicons/react/24/outline';
 
 export default function ScoresPage() {
@@ -27,25 +24,11 @@ export default function ScoresPage() {
 
   const scoreOptions = [
     {
-      href: '/scores/entry',
-      icon: PencilSquareIcon,
-      title: 'Manual Score Entry',
-      description: 'Enter scores for multiple students at once using the grid interface',
-      color: 'bg-blue-500',
-    },
-    {
       href: '/scores/upload',
       icon: CloudArrowUpIcon,
-      title: 'Bulk Upload Scores',
-      description: 'Import scores from an Excel file for batch processing',
+      title: 'AI Upload',
+      description: 'Upload an Excel, CSV, or PDF file — AI extracts and validates scores automatically',
       color: 'bg-green-500',
-    },
-    {
-      href: '/scores/manage',
-      icon: PlusCircleIcon,
-      title: 'Add/Delete Single Score',
-      description: 'Add or remove individual student scores with instant GPA updates',
-      color: 'bg-purple-500',
     },
   ];
 

@@ -229,6 +229,41 @@ export interface StudentResult {
   results: StudentResultRow[];
 }
 
+// =============================================
+// AI PIPELINE TYPES
+// =============================================
+
+export type IssueType = 'duplicate' | 'invalid_score' | 'missing_student' | 'wrong_course' | 'unregistered';
+export type Resolution = 'accepted' | 'rejected' | 'edited';
+
+export interface ReviewItemPayload {
+  rowNumber: number;
+  field: string;
+  originalValue?: string;
+  suggestedValue?: string;
+  confidence: number;
+  issueType: IssueType;
+  issueDetail: string;
+}
+
+export interface UploadJobResult {
+  jobId: string;
+  totalRows: number;
+  issuesFound: number;
+  issuesFixed: number;
+  issuesPending: number;
+  aiSummary: string;
+  reviewItems: ReviewItemPayload[];
+}
+
+export interface AuditLogEntry {
+  action: string;
+  entityType: string;
+  entityId: string;
+  actorId: string;
+  meta?: Record<string, unknown>;
+}
+
 // GPA Recalculation Types
 export interface GPARecalculationResult {
   studentId: string;

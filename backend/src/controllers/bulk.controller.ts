@@ -6,6 +6,7 @@ import { bulkStudentService } from '../services/bulk-student.service.js';
 import { bulkResultService } from '../services/bulk-result.service.js';
 import { sendSuccess, sendBadRequest } from '../utils/response.js';
 import { generateStudentTemplate, generateScoreTemplate } from '../utils/excel.js';
+import { prisma } from '../config/database.js';
 
 export class BulkController {
   /**
@@ -58,10 +59,27 @@ export class BulkController {
         return;
       }
 
+      const departmentId = req.user!.departmentId;
+      if (!departmentId) {
+        sendBadRequest(res, 'No department associated with your account');
+        return;
+      }
+
+      const dept = await prisma.department.findUnique({
+        where: { id: departmentId },
+        select: { code: true },
+      });
+
+      if (!dept) {
+        sendBadRequest(res, 'Department not found');
+        return;
+      }
+
       const result = await bulkResultService.importScores(
         req.file.buffer,
-        req.user!.departmentId || null,
-        req.user!.role
+        departmentId,
+        req.user!.role,
+        dept.code
       );
 
       if (!result.success && result.errorFileBuffer) {

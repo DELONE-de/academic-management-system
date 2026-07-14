@@ -4,53 +4,92 @@ import multer from 'multer';
 import { Request } from 'express';
 import { AppError } from './error.middleware.js';
 
-// Configure multer for memory storage
 const storage = multer.memoryStorage();
 
-// File filter for Excel files
+const ALLOWED_MIMES: Record<string, string> = {
+  // Excel
+  'application/vnd.ms-excel': 'excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'excel',
+  // CSV
+  'text/csv': 'csv',
+  'text/plain': 'csv',
+  // PDF
+  'application/pdf': 'pdf',
+  // Images
+  'image/jpeg': 'image',
+  'image/jpg': 'image',
+  'image/png': 'image',
+  'image/webp': 'image',
+};
+
+const ALLOWED_EXTENSIONS: Record<string, string> = {
+  '.xlsx': 'excel',
+  '.xls': 'excel',
+  '.csv': 'csv',
+  '.pdf': 'pdf',
+  '.jpg': 'image',
+  '.jpeg': 'image',
+  '.png': 'image',
+  '.webp': 'image',
+};
+
+export function getFileType(file: Express.Multer.File): string | null {
+  if (ALLOWED_MIMES[file.mimetype]) return ALLOWED_MIMES[file.mimetype];
+  const ext = file.originalname.toLowerCase().slice(file.originalname.lastIndexOf('.'));
+  return ALLOWED_EXTENSIONS[ext] || null;
+}
+
+const aiUploadFilter = (
+  req: Request,
+  file: Express.Multer.File,
+  callback: multer.FileFilterCallback
+) => {
+  if (getFileType(file)) {
+    callback(null, true);
+  } else {
+    callback(
+      new AppError(
+        'Unsupported file type. Allowed: .xlsx, .xls, .csv, .pdf, .jpg, .png, .webp',
+        400
+      ) as any
+    );
+  }
+};
+
+// Legacy Excel-only filter (kept for existing bulk routes)
 const excelFileFilter = (
   req: Request,
   file: Express.Multer.File,
   callback: multer.FileFilterCallback
 ) => {
-  const allowedMimes = [
-    'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'text/csv',
-  ];
-
-  const allowedExtensions = ['.xlsx', '.xls', '.csv'];
-  const fileExtension = file.originalname.toLowerCase().slice(file.originalname.lastIndexOf('.'));
-
-  if (allowedMimes.includes(file.mimetype) || allowedExtensions.includes(fileExtension)) {
+  const type = getFileType(file);
+  if (type === 'excel' || type === 'csv') {
     callback(null, true);
   } else {
-    callback(new AppError('Only Excel files (.xlsx, .xls) and CSV files are allowed', 400) as any);
+    callback(new AppError('Only Excel (.xlsx, .xls) and CSV files are allowed', 400) as any);
   }
 };
 
-// Create multer upload instance
+// AI upload — accepts Excel, CSV, PDF, images
+export const uploadAI = multer({
+  storage,
+  fileFilter: aiUploadFilter,
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB for images/PDFs
+});
+
+// Legacy Excel-only upload (existing bulk routes)
 export const uploadExcel = multer({
   storage,
   fileFilter: excelFileFilter,
-  limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
-  },
+  limits: { fileSize: 10 * 1024 * 1024 },
 });
 
-// Error handler for multer errors
 export function handleMulterError(error: any, req: any, res: any, next: any) {
   if (error instanceof multer.MulterError) {
     if (error.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({
-        success: false,
-        message: 'File too large. Maximum size is 10MB',
-      });
+      return res.status(400).json({ success: false, message: 'File too large. Maximum size is 20MB' });
     }
-    return res.status(400).json({
-      success: false,
-      message: `Upload error: ${error.message}`,
-    });
+    return res.status(400).json({ success: false, message: `Upload error: ${error.message}` });
   }
   next(error);
 }

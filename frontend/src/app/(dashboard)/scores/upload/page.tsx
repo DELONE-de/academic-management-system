@@ -2,46 +2,60 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { FileUpload } from '@/components/ui/FileUpload';
-import { UploadSummaryModal } from '@/components/modals/UploadSummaryModal';
-import { useUpload } from '@/hooks/useUpload';
-import { resultsApi } from '@/lib/api';
+import { uploadApi, resultsApi } from '@/lib/api';
 import { downloadBlob } from '@/lib/utils';
-import { 
-  ArrowDownTrayIcon, 
+import {
+  ArrowDownTrayIcon,
   CloudArrowUpIcon,
-  ArrowLeftIcon 
+  ArrowLeftIcon,
+  CheckCircleIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 
+function getAcademicYearOptions(): string[] {
+  const current = new Date().getFullYear();
+  return Array.from({ length: 5 }, (_, i) => {
+    const y = current - i;
+    return `${y}/${y + 1}`;
+  });
+}
+
+interface UploadResult {
+  jobId: string;
+  status: string;
+  totalStudents: number;
+  totalResultEntries: number;
+  issuesFound: number;
+  issuesFixed: number;
+  issuesPending: number;
+  aiSummary: string;
+}
+
 export default function ScoreBulkUploadPage() {
   const { user } = useAuth();
   const [file, setFile] = useState<File | null>(null);
-  const [showSummary, setShowSummary] = useState(false);
-
-  const {
-    isUploading,
-    result,
-    errorFile,
-    error,
-    upload,
-    downloadErrors,
-    reset,
-  } = useUpload(resultsApi.bulkUpload, {
-    onSuccess: () => setShowSummary(true),
-    onError: () => setShowSummary(true),
+  const [academicYear, setAcademicYear] = useState(() => {
+    const y = new Date().getFullYear();
+    return `${y}/${y + 1}`;
   });
+  const [isUploading, setIsUploading] = useState(false);
+  const [statusMessages, setStatusMessages] = useState<string[]>([]);
+  const [result, setResult] = useState<UploadResult | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
-  if (user?.role !== 'HOD') {
+  if (user?.role !== 'HOD' && user?.role !== 'EXAMINATION_OFFICER' && user?.role !== 'LECTURER') {
     return (
       <div className="text-center py-12">
         <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
-        <p className="text-gray-500">Only HODs can bulk import scores.</p>
+        <p className="text-gray-500">You do not have permission to upload scores.</p>
       </div>
     );
   }
@@ -51,111 +65,129 @@ export default function ScoreBulkUploadPage() {
       const blob = await resultsApi.downloadTemplate();
       downloadBlob(blob, 'score_upload_template.xlsx');
       toast.success('Template downloaded');
-    } catch (error) {
+    } catch {
       toast.error('Failed to download template');
     }
   };
 
   const handleUpload = async () => {
-    if (!file) {
-      toast.error('Please select a file');
-      return;
+    if (!file) { toast.error('Please select a file'); return; }
+
+    setIsUploading(true);
+    setStatusMessages([]);
+    setResult(null);
+    setUploadError(null);
+    abortRef.current = new AbortController();
+
+    try {
+      const response = await uploadApi.streamUpload(file, 'results', academicYear);
+
+      if (!response.ok || !response.body) {
+        const err = await response.json().catch(() => ({ message: 'Upload failed' }));
+        throw new Error(err.message);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let lastEvent = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('event:')) {
+            lastEvent = trimmed.slice(6).trim();
+          } else if (trimmed.startsWith('data:')) {
+            try {
+              const data = JSON.parse(trimmed.slice(5).trim());
+              if (data.message) setStatusMessages((prev) => [...prev, data.message]);
+              if (lastEvent === 'complete') setResult(data);
+              if (lastEvent === 'error') throw new Error(data.message || 'Processing failed');
+            } catch (parseErr: any) {
+              if (lastEvent === 'error') throw parseErr;
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      setUploadError(err.message || 'Upload failed');
+      toast.error(err.message || 'Upload failed');
+    } finally {
+      setIsUploading(false);
     }
-    await upload(file);
   };
 
   const handleReset = () => {
     setFile(null);
-    reset();
+    setStatusMessages([]);
+    setResult(null);
+    setUploadError(null);
   };
 
   return (
     <div className="space-y-6 animate-fadeIn">
-      {/* Header */}
       <div className="flex items-center gap-4">
         <Link href="/scores" className="p-2 hover:bg-gray-100 rounded-lg">
           <ArrowLeftIcon className="h-5 w-5" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Bulk Import Scores</h1>
-          <p className="text-gray-500">Import student scores from an Excel file</p>
+          <h1 className="text-2xl font-bold text-gray-900">AI Score Upload</h1>
+          <p className="text-gray-500">Upload a score sheet — AI extracts, validates, and flags issues for review</p>
         </div>
       </div>
 
-      {/* Info Banner */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <p className="text-blue-800">
-          <strong>Note:</strong> After successful import, the system automatically calculates:
-        </p>
-        <ul className="mt-2 text-sm text-blue-700 list-disc list-inside">
-          <li>Grade based on score</li>
-          <li>Grade Point (5-point scale)</li>
-          <li>Point × Unit (PXU)</li>
-          <li>Carry-over status (if score &lt; department pass mark)</li>
-          <li>Semester GPA and CGPA for all affected students</li>
-        </ul>
-      </div>
-
-      {/* Instructions */}
-      <Card title="Instructions">
-        <div className="space-y-4">
-          <div className="flex items-start gap-3">
-            <div className="flex-shrink-0 w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center text-primary-600 font-semibold">
-              1
-            </div>
-            <div>
-              <p className="font-medium text-gray-900">Download the template</p>
-              <p className="text-sm text-gray-500">Get the Excel template with correct column headers.</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <div className="flex-shrink-0 w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center text-primary-600 font-semibold">
-              2
-            </div>
-            <div>
-              <p className="font-medium text-gray-900">Fill in score data</p>
-              <p className="text-sm text-gray-500">
-                Add: MatricNumber, DepartmentCode, CourseCode, Score, StudentLevel, Semester, AcademicYear.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <div className="flex-shrink-0 w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center text-primary-600 font-semibold">
-              3
-            </div>
-            <div>
-              <p className="font-medium text-gray-900">Upload and process</p>
-              <p className="text-sm text-gray-500">
-                System validates, imports scores, and recalculates GPA automatically.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-6 pt-4 border-t">
-          <Button variant="outline" onClick={handleDownloadTemplate}>
-            <ArrowDownTrayIcon className="h-5 w-5 mr-2" />
-            Download Template
-          </Button>
+      {/* Step 1 — Academic Year */}
+      <Card title="Step 1 — Select Academic Year">
+        <div className="max-w-xs">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Academic Year</label>
+          <select
+            value={academicYear}
+            onChange={(e) => setAcademicYear(e.target.value)}
+            disabled={isUploading}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
+            {getAcademicYearOptions().map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-gray-500">
+            All records in the uploaded file will be assigned this academic year.
+          </p>
         </div>
       </Card>
 
-      {/* File Upload */}
-      <Card title="Upload File">
-        <div className="space-y-6">
+      {/* Step 2 — File Upload */}
+      <Card title="Step 2 — Upload File">
+        <div className="space-y-4">
           <FileUpload
-            accept=".xlsx,.xls,.csv"
-            maxSize={10}
+            accept=".xlsx,.xls,.csv,.pdf,.jpg,.jpeg,.png,.webp"
+            maxSize={20}
             onFileSelect={setFile}
             onFileClear={handleReset}
-            label="Score Data File"
-            description="Upload Excel file with score data"
+            label="Score Sheet"
+            description="Excel, CSV, PDF, or image of a printed score sheet"
             disabled={isUploading}
           />
 
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <p className="text-red-800">{error}</p>
+          {uploadError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
+              {uploadError}
+            </div>
+          )}
+
+          {/* Live status feed */}
+          {statusMessages.length > 0 && (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-1 max-h-40 overflow-y-auto">
+              {statusMessages.map((msg, i) => (
+                <p key={i} className="text-xs text-gray-600">{msg}</p>
+              ))}
             </div>
           )}
 
@@ -165,60 +197,74 @@ export default function ScoreBulkUploadPage() {
             </Button>
             <Button onClick={handleUpload} isLoading={isUploading} disabled={!file}>
               <CloudArrowUpIcon className="h-5 w-5 mr-2" />
-              Upload Scores
+              Upload & Process
             </Button>
           </div>
         </div>
       </Card>
 
-      {/* Format Reference */}
-      <Card title="Expected Format">
+      {/* Result summary */}
+      {result && (
+        <Card title="Processing Complete">
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              {result.issuesPending > 0 ? (
+                <ExclamationTriangleIcon className="h-5 w-5 text-yellow-500" />
+              ) : (
+                <CheckCircleIcon className="h-5 w-5 text-green-500" />
+              )}
+              <p className="text-sm text-gray-700">{result.aiSummary}</p>
+            </div>
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-2xl font-bold text-gray-900">{result.totalResultEntries}</p>
+                <p className="text-xs text-gray-500">Result entries</p>
+              </div>
+              <div className="bg-green-50 rounded-lg p-3">
+                <p className="text-2xl font-bold text-green-700">{result.issuesFixed}</p>
+                <p className="text-xs text-gray-500">Auto-fixed</p>
+              </div>
+              <div className="bg-yellow-50 rounded-lg p-3">
+                <p className="text-2xl font-bold text-yellow-700">{result.issuesPending}</p>
+                <p className="text-xs text-gray-500">Need review</p>
+              </div>
+            </div>
+            {result.issuesPending > 0 && (
+              <div className="flex justify-end">
+                <Link href={`/review/${result.jobId}`}>
+                  <Button>Go to Review Center</Button>
+                </Link>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {/* Format reference */}
+      <Card title="Expected File Format">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-4 py-2 text-left font-medium text-gray-500">Column</th>
                 <th className="px-4 py-2 text-left font-medium text-gray-500">Required</th>
-                <th className="px-4 py-2 text-left font-medium text-gray-500">Format/Example</th>
+                <th className="px-4 py-2 text-left font-medium text-gray-500">Format / Example</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              <tr><td className="px-4 py-2 font-medium">MatricNumber</td><td className="px-4 py-2 text-green-600">Yes</td><td className="px-4 py-2">CSC/2023/001</td></tr>
-              <tr><td className="px-4 py-2 font-medium">DepartmentCode</td><td className="px-4 py-2 text-green-600">Yes</td><td className="px-4 py-2">CSC (must match student)</td></tr>
-              <tr><td className="px-4 py-2 font-medium">CourseCode</td><td className="px-4 py-2 text-green-600">Yes</td><td className="px-4 py-2">CSC101</td></tr>
-              <tr><td className="px-4 py-2 font-medium">Score</td><td className="px-4 py-2 text-green-600">Yes</td><td className="px-4 py-2">0-100</td></tr>
-              
-
-              <tr><td className="px-4 py-2 font-medium">StudentLevel</td><td className="px-4 py-2 text-green-600">Yes</td><td className="px-4 py-2">LEVEL_100, LEVEL_200, ND1, HND1</td></tr>
-              <tr><td className="px-4 py-2 font-medium">Semester</td><td className="px-4 py-2 text-green-600">Yes</td><td className="px-4 py-2">FIRST or SECOND</td></tr>
-              <tr><td className="px-4 py-2 font-medium">AcademicYear</td><td className="px-4 py-2 text-green-600">Yes</td><td className="px-4 py-2">2023/2024</td></tr>
+              <tr><td className="px-4 py-2 font-medium">MatricNumber</td><td className="px-4 py-2 text-green-600">Yes</td><td className="px-4 py-2">2025/5337</td></tr>
+              <tr><td className="px-4 py-2 font-medium">Course columns</td><td className="px-4 py-2 text-green-600">Yes</td><td className="px-4 py-2">One column per course — header = course code (e.g. GST 111), cell = score 0–100</td></tr>
+              <tr><td className="px-4 py-2 font-medium">AcademicYear</td><td className="px-4 py-2 text-gray-400">Not needed</td><td className="px-4 py-2">Selected above — do not include in file</td></tr>
             </tbody>
           </table>
         </div>
-
-        <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <p className="text-sm text-yellow-800">
-            <strong>Important:</strong> Course must exist in the department for the specified level and semester.
-            Existing scores for the same student/course/year combination will be updated.
-          </p>
+        <div className="mt-4">
+          <Button variant="outline" size="sm" onClick={handleDownloadTemplate}>
+            <ArrowDownTrayIcon className="h-4 w-4 mr-1" />
+            Download Template
+          </Button>
         </div>
       </Card>
-
-      {/* Summary Modal */}
-      <UploadSummaryModal
-        isOpen={showSummary}
-        onClose={() => {
-          setShowSummary(false);
-          if (result?.successCount && result.successCount > 0) {
-            handleReset();
-          }
-        }}
-        result={result}
-        errorFile={errorFile}
-        onDownloadErrors={downloadErrors}
-        title="Score Import Summary"
-        type="scores"
-      />
     </div>
   );
 }

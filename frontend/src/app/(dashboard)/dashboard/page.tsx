@@ -1,252 +1,195 @@
-// src/app/(dashboard)/dashboard/page.tsx
+// FILE: frontend/src/app/(dashboard)/dashboard/page.tsx
 
 'use client';
 
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Card } from '@/components/ui/Card';
-import { departmentsApi, gpaApi, reportsApi } from '@/lib/api';
+import { reportsApi } from '@/lib/api';
 import {
   UserGroupIcon,
-  BookOpenIcon,
-  ChartBarIcon,
-  ExclamationTriangleIcon,
+  CloudArrowUpIcon,
+  CheckBadgeIcon,
+  ClockIcon,
 } from '@heroicons/react/24/outline';
 import { cn } from '@/lib/utils';
+import Link from 'next/link';
 
-interface DashboardStats {
+interface DashboardData {
   totalStudents: number;
-  totalCourses: number;
-  averageGpa: number | null;
-  carryOverCount: number;
+  pendingApprovals: number;
+  publishedBatches: number;
+  recentJobs: Array<{
+    id: string;
+    fileName: string;
+    status: string;
+    totalRows: number;
+    issuesFound: number;
+    issuesPending: number;
+    createdAt: string;
+    uploadedBy: { firstName: string; lastName: string };
+  }>;
+  gpaDistribution: {
+    firstClass: number;
+    secondUpper: number;
+    secondLower: number;
+    thirdClass: number;
+    pass: number;
+    fail: number;
+  };
 }
 
-interface StatCardProps {
-  title: string;
-  value: string | number;
-  icon: React.ElementType;
-  color: string;
-}
+const JOB_STATUS_COLOR: Record<string, string> = {
+  PROCESSING:   'bg-blue-100 text-blue-700',
+  NEEDS_REVIEW: 'bg-yellow-100 text-yellow-700',
+  APPROVED:     'bg-green-100 text-green-700',
+  REJECTED:     'bg-red-100 text-red-700',
+  PENDING:      'bg-gray-100 text-gray-600',
+};
 
-function StatCard({ title, value, icon: Icon, color }: StatCardProps) {
-  return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-gray-500">{title}</p>
-          <p className="text-3xl font-bold text-gray-900 mt-1">{value}</p>
-        </div>
-        <div className={cn('p-3 rounded-full', color)}>
-          <Icon className="h-6 w-6 text-white" />
-        </div>
-      </div>
-    </div>
-  );
-}
+const GPA_BANDS = [
+  { key: 'firstClass',   label: 'First Class',        color: 'bg-green-500' },
+  { key: 'secondUpper',  label: '2nd Upper',           color: 'bg-blue-500' },
+  { key: 'secondLower',  label: '2nd Lower',           color: 'bg-indigo-400' },
+  { key: 'thirdClass',   label: 'Third Class',         color: 'bg-yellow-400' },
+  { key: 'pass',         label: 'Pass',                color: 'bg-orange-400' },
+  { key: 'fail',         label: 'Fail',                color: 'bg-red-500' },
+];
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [facultyStats, setFacultyStats] = useState<any>(null);
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        if (user?.role === 'HOD' && user.departmentId) {
-          const [deptRes, gpaRes] = await Promise.all([
-            departmentsApi.getById(user.departmentId),
-            gpaApi.getDepartmentStats(user.departmentId),
-          ]);
+    reportsApi.getDashboardStats()
+      .then((r) => r.success && setData(r.data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
 
-          if (deptRes.success && gpaRes.success) {
-            setStats({
-              totalStudents: deptRes.data._count?.students || 0,
-              totalCourses: deptRes.data._count?.courses || 0,
-              averageGpa: gpaRes.data.averageGpa,
-              carryOverCount: gpaRes.data.distribution?.fail || 0,
-            });
-          }
-        } else if (user?.role === 'DEAN') {
-          const facultyRes = await reportsApi.getFacultyStats();
-          if (facultyRes.success) {
-            setFacultyStats(facultyRes.data);
-            setStats({
-              totalStudents: facultyRes.data.totalStudents,
-              totalCourses: facultyRes.data.departments.reduce(
-                (sum: number, d: any) => sum + d.courseCount,
-                0
-              ),
-              averageGpa:
-                facultyRes.data.departments.reduce(
-                  (sum: number, d: any) => sum + (d.averageGpa || 0),
-                  0
-                ) / facultyRes.data.departments.length || null,
-              carryOverCount: facultyRes.data.departments.reduce(
-                (sum: number, d: any) => sum + d.carryOverCount,
-                0
-              ),
-            });
-          }
-        }
-      } catch (error) {
-        console.error('Failed to fetch stats:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    if (user) {
-      fetchStats();
-    }
-  }, [user]);
-
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
       </div>
     );
   }
 
+  const totalGpa = data
+    ? Object.values(data.gpaDistribution).reduce((a, b) => a + b, 0)
+    : 0;
+
   return (
     <div className="space-y-6 animate-fadeIn">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">
-          Welcome back, {user?.firstName}!
-        </h1>
-        <p className="text-gray-500">
-          {user?.role === 'HOD'
-            ? `Managing ${user.department?.name} Department`
-            : `Overseeing ${user?.faculty?.name}`}
+        <h1 className="text-2xl font-bold text-gray-900">Welcome back, {user?.firstName}!</h1>
+        <p className="text-gray-500 text-sm">
+          {user?.role === 'HOD' ? 'Department overview' : 'Faculty overview'}
         </p>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard
-          title="Total Students"
-          value={stats?.totalStudents || 0}
-          icon={UserGroupIcon}
-          color="bg-blue-500"
-        />
-        <StatCard
-          title="Total Courses"
-          value={stats?.totalCourses || 0}
-          icon={BookOpenIcon}
-          color="bg-green-500"
-        />
-        <StatCard
-          title="Average GPA"
-          value={stats?.averageGpa?.toFixed(2) || 'N/A'}
-          icon={ChartBarIcon}
-          color="bg-purple-500"
-        />
-        <StatCard
-          title="Carry-overs"
-          value={stats?.carryOverCount || 0}
-          icon={ExclamationTriangleIcon}
-          color="bg-orange-500"
-        />
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: 'Total Students',      value: data?.totalStudents ?? 0,      icon: UserGroupIcon,    color: 'bg-blue-500' },
+          { label: 'Pending Approvals',   value: data?.pendingApprovals ?? 0,   icon: ClockIcon,        color: 'bg-yellow-500' },
+          { label: 'Published Batches',   value: data?.publishedBatches ?? 0,   icon: CheckBadgeIcon,   color: 'bg-green-500' },
+          { label: 'Recent Uploads',      value: data?.recentJobs.length ?? 0,  icon: CloudArrowUpIcon, color: 'bg-purple-500' },
+        ].map(({ label, value, icon: Icon, color }) => (
+          <div key={label} className="bg-white rounded-xl border border-gray-200 p-5 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500">{label}</p>
+              <p className="text-3xl font-bold text-gray-900 mt-1">{value}</p>
+            </div>
+            <div className={cn('p-3 rounded-full', color)}>
+              <Icon className="h-6 w-6 text-white" />
+            </div>
+          </div>
+        ))}
       </div>
 
-      {/* Dean: Department Overview */}
-      {user?.role === 'DEAN' && facultyStats && (
-        <Card title="Department Overview" subtitle={`${facultyStats.faculty.name}`}>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Department
-                  </th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
-                    Students
-                  </th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
-                    Courses
-                  </th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
-                    Avg GPA
-                  </th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
-                    Carry-overs
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {facultyStats.departments.map((dept: any) => (
-                  <tr key={dept.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="font-medium text-gray-900">{dept.name}</div>
-                      <div className="text-sm text-gray-500">{dept.code}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      {dept.studentCount}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      {dept.courseCount}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <span
-                        className={cn(
-                          'px-2 py-1 rounded-full text-sm font-medium',
-                          dept.averageGpa >= 3.5
-                            ? 'bg-green-100 text-green-800'
-                            : dept.averageGpa >= 2.5
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : 'bg-red-100 text-red-800'
-                        )}
-                      >
-                        {dept.averageGpa?.toFixed(2) || 'N/A'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      {dept.carryOverCount}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* GPA Distribution */}
+        <Card title="GPA Distribution" subtitle={totalGpa > 0 ? `${totalGpa} students with recorded GPAs` : 'No GPA data yet'}>
+          {totalGpa === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-8">No GPA data recorded yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {GPA_BANDS.map(({ key, label, color }) => {
+                const count = (data?.gpaDistribution as any)[key] ?? 0;
+                const pct = totalGpa > 0 ? Math.round((count / totalGpa) * 100) : 0;
+                return (
+                  <div key={key}>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-600">{label}</span>
+                      <span className="font-medium text-gray-900">{count} <span className="text-gray-400 font-normal">({pct}%)</span></span>
+                    </div>
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div className={cn('h-full rounded-full transition-all', color)} style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </Card>
-      )}
 
-      {/* Quick Actions */}
-      {user?.role === 'HOD' && (
-        <Card title="Quick Actions">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <a
-              href="/students"
-              className="flex flex-col items-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-            >
-              <UserGroupIcon className="h-8 w-8 text-primary-600 mb-2" />
-              <span className="text-sm font-medium text-gray-700">Manage Students</span>
-            </a>
-            <a
-              href="/courses"
-              className="flex flex-col items-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-            >
-              <BookOpenIcon className="h-8 w-8 text-primary-600 mb-2" />
-              <span className="text-sm font-medium text-gray-700">Manage Courses</span>
-            </a>
-            <a
-              href="/scores"
-              className="flex flex-col items-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-            >
-              <ChartBarIcon className="h-8 w-8 text-primary-600 mb-2" />
-              <span className="text-sm font-medium text-gray-700">Enter Scores</span>
-            </a>
-            <a
-              href="/reports"
-              className="flex flex-col items-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-            >
-              <ExclamationTriangleIcon className="h-8 w-8 text-primary-600 mb-2" />
-              <span className="text-sm font-medium text-gray-700">View Reports</span>
-            </a>
-          </div>
+        {/* Recent Upload Jobs */}
+        <Card
+          title="Recent Uploads"
+          headerAction={
+            <Link href="/scores/upload" className="text-sm text-primary-600 hover:underline">
+              New upload
+            </Link>
+          }
+        >
+          {!data?.recentJobs.length ? (
+            <p className="text-sm text-gray-400 text-center py-8">No uploads yet.</p>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {data.recentJobs.map((job) => (
+                <div key={job.id} className="py-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{job.fileName}</p>
+                    <p className="text-xs text-gray-400">
+                      {job.uploadedBy.firstName} {job.uploadedBy.lastName} · {new Date(job.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {job.issuesPending > 0 && (
+                      <Link href={`/review/${job.id}`} className="text-xs text-yellow-600 hover:underline">
+                        {job.issuesPending} to review
+                      </Link>
+                    )}
+                    <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium', JOB_STATUS_COLOR[job.status] ?? 'bg-gray-100 text-gray-600')}>
+                      {job.status.replace('_', ' ')}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
-      )}
+      </div>
+
+      {/* Quick actions */}
+      <Card title="Quick Actions">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { href: '/students',      label: 'Students',         icon: '👥' },
+            { href: '/scores/upload', label: 'Upload Scores',    icon: '📤' },
+            { href: '/approval',      label: 'Approvals',        icon: '✅' },
+            { href: '/reports',       label: 'Reports',          icon: '📊' },
+          ].map(({ href, label, icon }) => (
+            <Link key={href} href={href}
+              className="flex flex-col items-center p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors text-center">
+              <span className="text-2xl mb-1">{icon}</span>
+              <span className="text-sm font-medium text-gray-700">{label}</span>
+            </Link>
+          ))}
+        </div>
+      </Card>
     </div>
   );
 }
