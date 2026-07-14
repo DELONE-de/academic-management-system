@@ -1,158 +1,87 @@
-# Academic Management System - Backend API
+# AcadMind AI — Implementation Plan (Demo → SaaS)
 
-## Overview
-The Academic Management System Backend is a robust REST API built with Express.js and TypeScript that manages student academic records, grades, and GPA calculations for educational institutions.
+## Guiding principle
 
-## What It Is
-A comprehensive backend service that handles all academic data management for universities and colleges, including students, courses, departments, faculties, and academic performance tracking.
+Two tracks, not one push:
 
-## Features
-- **User Authentication & Authorization** - Role-based access control (DEAN, HOD) with JWT token authentication
-- **Student Management** - Create, update, and manage student records with admission tracking
-- **Course Management** - Define courses by level and semester with credit units
-- **Result Management** - Record and process student grades for courses
-- **GPA Calculation** - Automatically calculate semester GPA and CGPA based on grades and credit units
-- **Bulk Operations** - Import multiple students and grades via Excel files
-- **Department & Faculty Management** - Organize academic structure hierarchically
-- **Report Generation** - Generate academic performance reports in PDF format
-- **Data Export** - Export student results and GPA data to Excel
-- **Input Validation** - Comprehensive validation using Zod schemas
-- **Security** - CORS protection, helmet for HTTP headers, password hashing with bcrypt
-- **Database Migrations** - Versioned schema changes with Prisma migrations
+1. **Demo track** — prove the AI-review pattern works and looks like a real product. Fast, scrappy where it doesn't matter, polished where it does (upload flow, review center, dashboard).
+2. **SaaS track** — only after the demo earns a "yes" from an HOD/Dean. This is where the framework migration, multi-tenancy, billing, and hardening happen.
 
-## What It Can Do
-- Login with role-based access
-- Upload bulk student data from CSV/Excel
-- Upload bulk grades and calculate GPAs automatically
-- Generate student transcripts and academic reports
-- Filter results by student, course, level, and semester
-- Export data to PDF and Excel formats
-- Track student progression across levels
-- Monitor departmental academic performance
-- Change user passwords securely
+Building both at once is how ambitious rewrites stall. Sequence them.
 
-## Problems It Solves
-1. **Manual Grade Recording** - Eliminates tedious manual entry of grades
-2. **GPA Calculation Errors** - Automates accurate GPA calculations
-3. **Data Organization** - Centralizes scattered student records
-4. **Report Generation** - Quickly generates academic transcripts
-5. **Bulk Data Import** - Handles importing hundreds of records at once
-6. **Audit Trail** - Maintains timestamps for all data modifications
+---
 
-## How It Solves Them
-- **Bulk Upload System** - Accepts Excel files and processes records in batches
-- **Automated Calculations** - GPA formula engine calculates instantly after grades are recorded
-- **Structured Database** - PostgreSQL with Prisma ORM ensures data integrity
-- **PDF Generation** - Generates professional academic reports on demand
-- **Role-Based Access** - DEAN and HOD permissions control who can access what
-- **Data Validation** - Zod validators ensure all data meets requirements before storage
+## Phase 0 — Decisions to lock before writing code
 
-## Tech Stack
-- Express.js (REST API framework)
-- TypeScript (Type safety)
-- PostgreSQL (Database)
-- Prisma ORM (Database client)
-- JWT (Authentication)
-- bcryptjs (Password hashing)
-- Multer (File uploads)
-- PDFKit (PDF generation)
-- XLSX (Excel file handling)
+| Decision | Recommendation | Why |
+|---|---|---|
+| Backend framework for demo | **Keep Express** | Your GPA system's Express backend already has the schema, GPA logic, PDF/Excel generation working. NestJS migration is real effort — do it in Phase 2, after validation, not before. |
+| AI provider | **Gemini** (per your plan), with Groq as fallback | You already have a proven Groq integration with human-in-the-loop review from the GPA project. Keep it as a fallback if Gemini rate limits or costs bite during the demo. |
+| Database | **Supabase** | Fast to stand up, gives you Postgres + storage + auth in one place. Worth the switch even for the demo. |
+| OCR / handwriting | **Typed/scanned docs as the core path; handwriting as a stretch demo, not a promise** | Even strong OCR/vision models misread handwritten digits. A misread "7" as "1" in front of a Dean kills credibility. Demo with clean typed scans first. |
 
-## Key Endpoints
-- `POST /api/auth/login` - User login
-- `GET /api/auth/profile` - Get user profile
-- `POST /api/bulk/students` - Bulk upload students
-- `POST /api/bulk/results` - Bulk upload results
-- `GET /api/students` - List all students
-- `GET /api/results/:studentId` - Get student results
-- `GET /api/gpa/:studentId` - Get student GPA
-- `GET /api/report/transcript/:studentId` - Generate transcript
+If you want to follow the original NestJS-from-day-one plan instead, that's a valid call too — just know it adds ~1-2 weeks before you have anything demoable.
 
-# Academic Management System - Frontend
+---
 
-## Overview
-The Academic Management System Frontend is a modern web application built with Next.js 14 and React 18 that provides an intuitive interface for managing academic records, viewing grades, and monitoring student performance.
+## Phase 1 — Demo track (target: 4-5 weeks, part-time pace)
 
-## What It Is
-A user-friendly web dashboard that connects to the backend API, enabling students, department heads, and faculty deans to view and manage academic information in real-time.
+### Week 1 — Foundation
+- [ ] Set up Supabase project (Postgres + Storage + Auth)
+- [ ] Port your existing Prisma schema (Student, Course, Result, SemesterGPA, Department, Faculty, User/HOD/Dean) — mostly reusable as-is
+- [ ] Add new roles: **Lecturer**, **Examination Officer** (existing system only has HOD/Dean)
+- [ ] Seed script: generate demo dataset — 500 students, 50 courses, 5 departments, 3 levels, 5,000+ results, **with intentional errors** (duplicate matric numbers, invalid scores, missing students, wrong course codes, unregistered students)
 
-## Features
-- **User Authentication** - Secure login with email and password
-- **Dashboard** - Overview of key academic information and statistics
-- **Student Management** - View and manage student records by department
-- **Grade Viewing** - Display student results organized by course and semester  
-- **GPA Display** - Show semester GPA and cumulative GPA (CGPA)
-- **Bulk Upload Interface** - Upload multiple students and grades via Excel files
-- **Report Generation** - View and download academic transcripts
-- **Performance Charts** - Visualize student performance trends with chart.js
-- **Responsive Design** - Works on desktop, tablet, and mobile devices
-- **Role-Based UI** - Different views for students, HODs, and deans
-- **Real-time Data** - Fetch latest data from the backend API
-- **Form Validation** - Client-side validation with immediate feedback
+### Week 2 — AI Upload Pipeline (Module 4 & 5, the core differentiator)
+- [ ] File upload endpoint: Excel, CSV, PDF, image
+- [ ] Gemini function-calling setup: `extractStudents()`, `extractResults()` from uploaded files
+- [ ] Backend validation tools Gemini can call: `validateStudent()`, `validateCourse()`, `checkRegistration()`, `findDuplicateStudents()`
+- [ ] Confidence scoring per extracted field (this is what makes "AI Found 12 Issues, 9 Fixed, 3 Need Review" possible)
+- [ ] AI Activity Feed — stream status updates during processing (Server-Sent Events or simple polling is enough; no need for websockets)
 
-## What It Can Do
-- Log in with institutional credentials
-- View personal academic records (for students)
-- Browse all students in department (for HODs)
-- Monitor faculty performance (for deans)
-- Upload bulk student data via Excel
-- Upload and process bulk grades
-- Download academic transcripts as PDF
-- View GPA calculations and academic standing
-- Filter students by level, department, or status
-- Generate performance reports with charts
-- Update user passwords
-- View course information and grades
+### Week 3 — Human Review Center (Module 6) + GPA Engine (Module 7)
+- [ ] Review UI: Accept / Reject / Edit per flagged record
+- [ ] Port your existing `grading.ts` logic (GPA, CGPA, degree classification) — already built and correct, just needs wiring to new endpoints
+- [ ] AI explanation call: "why is this GPA 4.62" — one Gemini call summarizing the calculation in plain language
 
-## Problems It Solves
-1. **Slow Academic Information Access** - Instant access to grades and GPA instead of waiting for paper reports
-2. **Poor Data Visualization** - Charts show performance trends clearly
-3. **Manual Bulk Processing** - Excel uploads replace manual data entry
-4. **Paper-Based Workflows** - Digital system eliminates paper transcripts
-5. **Limited Access to Records** - Role-based access allows 24/7 availability
-6. **Disconnected Information** - Centralized platform for all academic data
+### Week 4 — Approval Workflow, Reports, Dashboard
+- [ ] Approval chain: Lecturer → Exam Officer → HOD → Dean (optional), each step logged
+- [ ] Audit log (Module 11) — simple append-only table is enough for the demo
+- [ ] Reports: reuse your existing PDFKit/XLSX generation code for transcripts and department reports
+- [ ] Dashboard cards + charts (Recharts): students, pending approvals, published results, GPA distribution, pass rate
 
-## How It Solves Them
-- **Real-time API Integration** - Fetches data instantly from backend
-- **Chart Visualizations** - Uses chart.js to display performance graphs
-- **Bulk Upload Component** - Simplified Excel import interface with progress tracking
-- **PDF Download** - One-click transcript generation and download
-- **Authentication System** - Secure login with role-based redirects
-- **Centralized Dashboard** - Single source of truth for all academic information
+### Week 5 — Polish, Landing Page, Rehearsal
+- [ ] Landing page (Module 1): hero, features, workflow, security, request-demo CTA
+- [ ] Full dry run of the demo script end to end — this is when you'll find the rough edges
+- [ ] Cut anything that isn't load-bearing for the script. A working narrow path beats a broken wide one.
 
-## Tech Stack
-- Next.js 14 (React framework)
-- React 18 (UI library)
-- TypeScript (Type safety)
-- Tailwind CSS (Styling)
-- React Hook Form (Form management)
-- Zod (Schema validation)
-- Axios (HTTP client)
-- Chart.js (Data visualization)
-- React Hot Toast (Notifications)
+---
 
-## Key Pages
-- `/` - Home/Dashboard
-- `/login` - Authentication page
-- `/students` - Student management
-- `/results` - View academic results
-- `/gpa` - View GPA information
-- `/bulk-upload` - Bulk data upload
-- `/reports` - Academic reports and transcripts
-- `/profile` - User profile settings
+## Phase 2 — Post-demo hardening → SaaS
 
-## Key Features by Role
-**Student:**
-- View personal grades
-- Download transcript
-- Monitor GPA
+**Only start this after the demo gets real interest.** Rewriting before validation is the most common way this kind of project stalls.
 
-**HOD (Head Of Department):**
-- View all department students
-- Upload bulk results
-- Generate department reports
+- [ ] Migrate Express → NestJS **incrementally**, module by module — start with the least-coupled piece (reports), then auth, then the core result/GPA logic last
+- [ ] Multi-tenancy: `institutionId` scoping on every table, row-level security policies in Supabase
+- [ ] Billing integration (Paystack/Flutterwave — you've already scoped these for SendPadi, so the integration pattern transfers)
+- [ ] Cost controls on Gemini calls: cache repeated validations, batch requests, set hard rate limits per institution
+- [ ] Proper immutable audit log (not just the in-app feed)
+- [ ] Load testing beyond demo scale (5,000 results was the demo target; real institutions will exceed that)
+- [ ] Security pass: move JWT out of `localStorage` into httpOnly cookies, re-audit RBAC enforcement at the service layer, sanitize all file uploads
 
-**DEAN (Faculty Dean):**
-- View all faculty students
-- Monitor faculty performance
-- Generate faculty reports
+---
+
+## Risk register
+
+| Risk | Impact | Mitigation |
+|---|---|---|
+| Handwriting OCR misreads scores | Demo credibility | Lead with clean typed/printed scans; treat handwriting as a bonus, not a guarantee |
+| Full NestJS rewrite before validation | Wasted weeks, delayed demo | Defer to Phase 2 |
+| Gemini rate limits / cost at scale | Budget, demo reliability | Groq fallback (already proven in your GPA project), cache validation results |
+| Solo dev, dual job (NTBLCP + this) | Timeline slip | Weekly milestones above are deliberately loose — treat them as checkpoints, not deadlines |
+
+---
+
+## Immediate next step
+
+Start Week 1. Most of it is **porting**, not new work — your schema, GPA logic, and PDF/Excel generation already exist and are tested. The genuinely new build is the AI upload pipeline (Week 2), so getting the foundation done fast buys you more time for the part that actually needs it.
