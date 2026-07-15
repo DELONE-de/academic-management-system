@@ -86,186 +86,87 @@ ${content}`,
 }
 
 // ============================================================
-// FUNCTION-CALLING VALIDATION PASS (Groq tool_calls)
+// DIRECT VALIDATION — no LLM, calls tools directly
+// Groq is only used for extraction; validation doesn't need an LLM
+// since records are already structured at this point.
 // ============================================================
-
-// Mirror the Gemini function declarations as Groq tool definitions
-const groqTools: Groq.Chat.Completions.ChatCompletionTool[] = [
-  {
-    type: 'function',
-    function: {
-      name: 'checkRegistration',
-      description: 'Check if a student exists and is registered for the given courses',
-      parameters: {
-        type: 'object',
-        properties: {
-          matricNumber: { type: 'string' },
-          departmentCode: { type: 'string' },
-          courseCodes: { type: 'array', items: { type: 'string' } },
-        },
-        required: ['matricNumber', 'departmentCode', 'courseCodes'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'validateCourse',
-      description: 'Validate course codes and scores for a student',
-      parameters: {
-        type: 'object',
-        properties: {
-          matricNumber: { type: 'string' },
-          departmentCode: { type: 'string' },
-          academicYear: { type: 'string' },
-          courses: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                courseCode: { type: 'string' },
-                score: { type: 'number' },
-              },
-              required: ['courseCode', 'score'],
-            },
-          },
-        },
-        required: ['matricNumber', 'departmentCode', 'academicYear', 'courses'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'saveResult',
-      description: 'Save validated results for a student',
-      parameters: {
-        type: 'object',
-        properties: {
-          matricNumber: { type: 'string' },
-          departmentCode: { type: 'string' },
-          academicYear: { type: 'string' },
-          courses: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                courseCode: { type: 'string' },
-                score: { type: 'number' },
-              },
-              required: ['courseCode', 'score'],
-            },
-          },
-        },
-        required: ['matricNumber', 'departmentCode', 'academicYear', 'courses'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'validateStudent',
-      description: 'Validate a student record',
-      parameters: {
-        type: 'object',
-        properties: {
-          matricNumber: { type: 'string' },
-          firstName: { type: 'string' },
-          lastName: { type: 'string' },
-          departmentCode: { type: 'string' },
-          admissionYear: { type: 'number' },
-          studentLevel: { type: 'string' },
-        },
-        required: ['matricNumber', 'departmentCode'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'findDuplicateStudents',
-      description: 'Find duplicate matric numbers in the batch and in the database',
-      parameters: {
-        type: 'object',
-        properties: {
-          matricNumbers: { type: 'array', items: { type: 'string' } },
-          departmentCode: { type: 'string' },
-        },
-        required: ['matricNumbers', 'departmentCode'],
-      },
-    },
-  },
-];
-
 export async function groqValidateWithTools(
   records: any[],
   type: ExtractionType,
   departmentCode: string,
   onProgress?: (message: string) => void
 ): Promise<ReviewItemPayload[]> {
-  const prompt =
-    type === 'students'
-      ? `Validate these student records by calling validateStudent for each one, then call findDuplicateStudents with all matric numbers at the end.
-Records: ${JSON.stringify(records)}`
-      : `Validate and save these score records. Department code is "${departmentCode}".
-For each student row:
-1. Call checkRegistration with their matricNumber, departmentCode "${departmentCode}", and all their courseCodes
-2. Call validateCourse with departmentCode "${departmentCode}", academicYear, and all their courses
-3. If BOTH pass, call saveResult
-4. If either fails, do NOT call saveResult
-Process all students. Pass all courses in one call per student.
-Records: ${JSON.stringify(records)}`;
-
-  const messages: Groq.Chat.Completions.ChatCompletionMessageParam[] = [
-    { role: 'user', content: prompt },
-  ];
-
   const reviewItems: ReviewItemPayload[] = [];
 
-  // Agentic loop — keep going until no more tool calls
-  while (true) {
-    const response = await groq.chat.completions.create({
-      model: MODEL,
-      messages,
-      tools: groqTools,
-      tool_choice: 'auto',
-      temperature: 0.1,
-    });
-
-    const message = response.choices[0].message;
-    messages.push(message as Groq.Chat.Completions.ChatCompletionMessageParam);
-
-    if (!message.tool_calls || message.tool_calls.length === 0) break;
-
-    const toolResults: Groq.Chat.Completions.ChatCompletionToolMessageParam[] = [];
-
-    for (const call of message.tool_calls) {
-      const args = JSON.parse(call.function.arguments);
-      onProgress?.(`Checking: ${call.function.name}(${JSON.stringify(args).slice(0, 60)}...)`);
-
-      const toolResult = await dispatchToolCall(call.function.name, args);
-
-      // Same review item logic as Gemini
-      if (call.function.name === 'validateStudent' && toolResult.valid === false) {
-        const record = records.find((r) => r.matricNumber?.toUpperCase() === args.matricNumber?.toUpperCase());
+  if (type === 'students') {
+    for (const record of records) {
+      onProgress?.(`Validating student ${record.matricNumber}...`);
+      const result = await dispatchToolCall('validateStudent', {
+        matricNumber: record.matricNumber,
+        firstName: record.firstName,
+        lastName: record.lastName,
+        departmentCode: record.departmentCode ?? departmentCode,
+        admissionYear: record.admissionYear,
+        studentLevel: record.studentLevel,
+      });
+      if (result.valid === false) {
         reviewItems.push({
-          rowNumber: record?.rowNumber ?? 0,
+          rowNumber: record.rowNumber ?? 0,
           field: 'student',
-          originalValue: args.matricNumber,
-          suggestedValue: Object.values(toolResult.suggestions ?? {})[0] as string,
-          confidence: toolResult.confidence,
-          issueType: toolResult.issues[0]?.includes('duplicate') ? 'duplicate'
-            : toolResult.issues[0]?.includes('not found') ? 'missing_student' : 'invalid_score',
-          issueDetail: toolResult.issues.join('; '),
+          originalValue: record.matricNumber,
+          suggestedValue: Object.values(result.suggestions ?? {})[0] as string,
+          confidence: result.confidence,
+          issueType: result.issues[0]?.includes('duplicate') ? 'duplicate'
+            : result.issues[0]?.includes('not found') ? 'missing_student' : 'invalid_score',
+          issueDetail: result.issues.join('; '),
         });
       }
+    }
+    // duplicate check
+    const dupResult = await dispatchToolCall('findDuplicateStudents', {
+      matricNumbers: records.map((r) => r.matricNumber),
+      departmentCode,
+    });
+    for (const m of [...(dupResult.duplicatesInBatch ?? []), ...(dupResult.duplicatesInDb ?? [])]) {
+      const record = records.find((r) => r.matricNumber?.toUpperCase() === m.toUpperCase());
+      reviewItems.push({
+        rowNumber: record?.rowNumber ?? 0,
+        field: 'matricNumber',
+        originalValue: m,
+        confidence: 0.95,
+        issueType: 'duplicate',
+        issueDetail: (dupResult.duplicatesInBatch ?? []).includes(m)
+          ? 'Duplicate matric number within this upload batch'
+          : 'Student already exists in the database',
+      });
+    }
+  } else {
+    for (const record of records) {
+      const { matricNumber, academicYear, courses } = record;
+      const courseCodes = (courses ?? []).map((c: any) => c.courseCode);
+      onProgress?.(`Checking registration: ${matricNumber}...`);
 
-      if (call.function.name === 'validateCourse' && !toolResult.valid) {
-        const record = records.find((r) => r.matricNumber?.toUpperCase() === args.matricNumber?.toUpperCase());
-        for (const ci of toolResult.courseIssues ?? []) {
+      const regResult = await dispatchToolCall('checkRegistration', { matricNumber, departmentCode, courseCodes });
+      if (regResult.valid === false) {
+        reviewItems.push({
+          rowNumber: record.rowNumber ?? 0,
+          field: 'matricNumber',
+          originalValue: matricNumber,
+          suggestedValue: Object.values(regResult.suggestions ?? {})[0] as string,
+          confidence: regResult.confidence,
+          issueType: regResult.issues[0]?.includes('not found') ? 'missing_student'
+            : regResult.issues[0]?.includes('not offered') ? 'wrong_course' : 'unregistered',
+          issueDetail: regResult.issues.join('; '),
+        });
+        continue;
+      }
+
+      const courseResult = await dispatchToolCall('validateCourse', { matricNumber, departmentCode, academicYear, courses });
+      if (!courseResult.valid) {
+        for (const ci of courseResult.courseIssues ?? []) {
           if (ci.issues.length > 0) {
             reviewItems.push({
-              rowNumber: record?.rowNumber ?? 0,
+              rowNumber: record.rowNumber ?? 0,
               field: 'courseCode',
               originalValue: ci.courseCode,
               suggestedValue: Object.values(ci.suggestions ?? {})[0] as string,
@@ -275,63 +176,24 @@ Records: ${JSON.stringify(records)}`;
             });
           }
         }
+        continue;
       }
 
-      if (call.function.name === 'checkRegistration' && toolResult.valid === false) {
-        const record = records.find((r) => r.matricNumber?.toUpperCase() === args.matricNumber?.toUpperCase());
+      onProgress?.(`Saving results: ${matricNumber}...`);
+      const saveResult = await dispatchToolCall('saveResult', { matricNumber, departmentCode, academicYear, courses });
+      if (saveResult.error) {
         reviewItems.push({
-          rowNumber: record?.rowNumber ?? 0,
+          rowNumber: record.rowNumber ?? 0,
           field: 'matricNumber',
-          originalValue: args.matricNumber,
-          suggestedValue: Object.values(toolResult.suggestions ?? {})[0] as string,
-          confidence: toolResult.confidence,
-          issueType: toolResult.issues[0]?.includes('not found') ? 'missing_student'
-            : toolResult.issues[0]?.includes('not offered') ? 'wrong_course' : 'unregistered',
-          issueDetail: toolResult.issues.join('; '),
+          originalValue: matricNumber,
+          confidence: 0.0,
+          issueType: 'missing_student',
+          issueDetail: saveResult.error,
         });
+      } else {
+        onProgress?.(`Saved ${saveResult.saved} result(s) for ${matricNumber} — GPA recalculated`);
       }
-
-      if (call.function.name === 'findDuplicateStudents') {
-        const { duplicatesInBatch, duplicatesInDb } = toolResult;
-        for (const m of [...(duplicatesInBatch ?? []), ...(duplicatesInDb ?? [])]) {
-          const record = records.find((r) => r.matricNumber?.toUpperCase() === m.toUpperCase());
-          reviewItems.push({
-            rowNumber: record?.rowNumber ?? 0,
-            field: 'matricNumber',
-            originalValue: m,
-            confidence: 0.95,
-            issueType: 'duplicate',
-            issueDetail: (duplicatesInBatch ?? []).includes(m)
-              ? 'Duplicate matric number within this upload batch'
-              : 'Student already exists in the database',
-          });
-        }
-      }
-
-      if (call.function.name === 'saveResult') {
-        if (toolResult.error) {
-          const record = records.find((r) => r.matricNumber?.toUpperCase() === args.matricNumber?.toUpperCase());
-          reviewItems.push({
-            rowNumber: record?.rowNumber ?? 0,
-            field: 'matricNumber',
-            originalValue: args.matricNumber,
-            confidence: 0.0,
-            issueType: 'missing_student',
-            issueDetail: toolResult.error,
-          });
-        } else {
-          onProgress?.(`Saved ${toolResult.saved} result(s) for ${args.matricNumber} — GPA recalculated`);
-        }
-      }
-
-      toolResults.push({
-        role: 'tool',
-        tool_call_id: call.id,
-        content: JSON.stringify(toolResult),
-      });
     }
-
-    messages.push(...toolResults);
   }
 
   return reviewItems;

@@ -263,10 +263,7 @@ export async function checkRegistration(args: {
   const issues: string[] = [];
   const suggestions: Record<string, string> = {};
 
-  const student = await prisma.student.findUnique({
-    where: { matricNumber: args.matricNumber.toUpperCase() },
-    select: { id: true, departmentId: true, department: { select: { code: true } } },
-  });
+  const student = await resolveStudent(args.matricNumber, args.departmentCode);
 
   if (!student) {
     issues.push(`Student '${args.matricNumber}' not found`);
@@ -333,8 +330,11 @@ export async function saveResult(args: {
   academicYear: string;
   courses: Array<{ courseCode: string; score: number }>;
 }): Promise<{ saved: number; skipped: number; gpaRecalculated: boolean; error?: string }> {
+  const resolved = await resolveStudent(args.matricNumber, args.departmentCode);
+  if (!resolved) return { saved: 0, skipped: 0, gpaRecalculated: false, error: `Student '${args.matricNumber}' not found` };
+
   const student = await prisma.student.findUnique({
-    where: { matricNumber: args.matricNumber.toUpperCase() },
+    where: { id: resolved.id },
     select: { id: true, departmentId: true, department: { select: { passMark: true } } },
   });
 
@@ -387,6 +387,34 @@ export async function saveResult(args: {
   }
 
   return { saved, skipped, gpaRecalculated: gpaGroups.size > 0 };
+}
+
+// ============================================================
+// MATRIC RESOLUTION
+// Scores files use short format YYYY/NNNN (e.g. 2024/1813).
+// DB stores full format DEPT/YEAR/NUM (e.g. HIM/2024/1813).
+// This helper resolves either format to the actual DB record.
+// ============================================================
+
+async function resolveStudent(matricNumber: string, departmentCode: string) {
+  // Try exact match first (already full format)
+  let student = await prisma.student.findUnique({
+    where: { matricNumber: matricNumber.toUpperCase() },
+    select: { id: true, departmentId: true, department: { select: { code: true } } },
+  });
+  if (student) return student;
+
+  // Short format YYYY/NNNN — try DEPT/YEAR/NUM
+  if (/^\d{4}\/\d+$/.test(matricNumber)) {
+    const full = `${departmentCode.toUpperCase()}/${matricNumber}`;
+    student = await prisma.student.findUnique({
+      where: { matricNumber: full },
+      select: { id: true, departmentId: true, department: { select: { code: true } } },
+    });
+    if (student) return student;
+  }
+
+  return null;
 }
 
 // Dispatcher — called by upload service when Gemini returns a function call

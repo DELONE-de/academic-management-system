@@ -5,6 +5,7 @@ import { authenticate, authorize } from '../middleware/auth.middleware.js';
 import { prisma } from '../config/database.js';
 import { AuthRequest } from '../types/index.js';
 import { UserRole } from '@prisma/client';
+import { saveResult } from '../ai/validation.tools.js';
 
 const router = Router();
 router.use(authenticate);
@@ -77,6 +78,11 @@ router.patch('/:itemId', async (req: AuthRequest, res: Response) => {
       resolvedAt: new Date(),
     },
   });
+
+  // Commit corrected data back to DB for accepted/edited non-missing items
+  if (resolution !== 'rejected' && item.issueType !== 'missing_student' && item.rawRecord) {
+    await commitReviewItem(item, resolution === 'edited' ? correctedValue : undefined);
+  }
 
   // Update job pending/fixed counts
   await prisma.uploadJob.update({
@@ -158,5 +164,40 @@ router.post('/:jobId/approve-all', async (req: AuthRequest, res: Response) => {
 
   res.json({ success: true, message: `${pending.length} items approved`, resolved: pending.length });
 });
+
+// Commit a reviewed item back to the DB.
+// rawRecord is the original extracted student row (matricNumber, academicYear, courses[]).
+// For 'edited' resolutions on invalid_score, the correctedValue replaces the score for that course.
+async function commitReviewItem(
+  item: { issueType: string; field: string; originalValue: string | null; rawRecord: any },
+  correctedValue?: string
+): Promise<void> {
+  const raw = item.rawRecord as { matricNumber: string; academicYear: string; courses: Array<{ courseCode: string; score: number }>; departmentCode?: string };
+  if (!raw?.matricNumber || !raw?.academicYear || !raw?.courses) return;
+
+  // Get departmentCode from the upload job's department
+  const uploadJob = await prisma.uploadJob.findFirst({
+    where: { reviewItems: { some: { originalValue: item.originalValue ?? undefined } } },
+    include: { department: { select: { code: true } } },
+  });
+  const departmentCode = raw.departmentCode ?? uploadJob?.department?.code ?? '';
+  if (!departmentCode) return;
+
+  let courses = raw.courses;
+
+  // For edited invalid_score: replace the score for the flagged course
+  if (item.issueType === 'invalid_score' && item.field === 'courseCode' && correctedValue) {
+    const correctedScore = parseFloat(correctedValue);
+    if (!isNaN(correctedScore)) {
+      courses = courses.map((c) =>
+        c.courseCode.toUpperCase() === item.originalValue?.toUpperCase()
+          ? { ...c, score: correctedScore }
+          : c
+      );
+    }
+  }
+
+  await saveResult({ matricNumber: raw.matricNumber, departmentCode, academicYear: raw.academicYear, courses });
+}
 
 export default router;

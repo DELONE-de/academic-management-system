@@ -1,6 +1,6 @@
 // FILE: frontend/src/types/index.ts
 
-export type UserRole = 'HOD' | 'DEAN';
+export type UserRole = 'HOD' | 'DEAN' | 'LECTURER' | 'EXAMINATION_OFFICER';
 export type Level = 'ND1' | 'ND2' | 'HND1' | 'HND2' | 'LEVEL_100' | 'LEVEL_200' | 'LEVEL_300' | 'LEVEL_400' | 'LEVEL_500';
 export type Semester = 'FIRST' | 'SECOND';
 export type Grade = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';

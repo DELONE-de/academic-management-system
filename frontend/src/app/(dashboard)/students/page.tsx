@@ -1,228 +1,73 @@
-// FILE: frontend/src/app/(dashboard)/students/page.tsx
-
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
-import { Table } from '@/components/ui/Table';
-import { Modal } from '@/components/ui/Modal';
 import { studentsApi } from '@/lib/api';
-import { Student } from '@/types';
-import { formatLevel, LEVELS } from '@/lib/utils';
-import BulkLevelUpdate from '@/components/BulkLevelUpdate';
-import { 
-  PlusIcon, 
-  PencilIcon, 
-  TrashIcon, 
-  EyeIcon,
-  CloudArrowUpIcon,
-  MagnifyingGlassIcon,
-  ArrowUpCircleIcon
-} from '@heroicons/react/24/outline';
-import toast from 'react-hot-toast';
 import Link from 'next/link';
 
 export default function StudentsPage() {
   const { user } = useAuth();
-  const [students, setStudents] = useState<Student[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [students, setStudents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [levelFilter, setLevelFilter] = useState('');
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [showBulkUpdate, setShowBulkUpdate] = useState(false);
-  const limit = 20;
 
-  const fetchStudents = useCallback(async () => {
+  const fetch = useCallback(async () => {
+    setLoading(true);
     try {
-      setIsLoading(true);
-      const response = await studentsApi.getAll({
-        departmentId: user?.departmentId || undefined,
-        level: levelFilter || undefined,
-        search: search || undefined,
-        page,
-        limit,
-      });
-      if (response.success) {
-        setStudents(response.data || []);
-        setTotal(response.meta?.total || 0);
-      }
-    } catch (error) {
-      toast.error('Failed to fetch students');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user?.departmentId, search, levelFilter, page]);
+      const r = await studentsApi.getAll({ departmentId: user?.departmentId, search: search || undefined, limit: 50 });
+      if (r.success) setStudents(r.data || []);
+    } finally { setLoading(false); }
+  }, [user?.departmentId, search]);
 
-  useEffect(() => {
-    if (user) {
-      fetchStudents();
-    }
-  }, [user, fetchStudents]);
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this student?')) return;
-    try {
-      await studentsApi.delete(id);
-      toast.success('Student deleted successfully');
-      fetchStudents();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to delete student');
-    }
-  };
-
-  const columns = [
-    {
-      key: 'matricNumber',
-      header: 'Matric Number',
-      render: (student: Student) => (
-        <span className="font-medium text-gray-900">{student.matricNumber}</span>
-      ),
-    },
-    {
-      key: 'name',
-      header: 'Name',
-      render: (student: Student) => (
-        <div>
-          <div className="font-medium text-gray-900">
-            {student.lastName} {student.firstName} {student.middleName}
-          </div>
-          {student.email && <div className="text-sm text-gray-500">{student.email}</div>}
-        </div>
-      ),
-    },
-    {
-      key: 'currentLevel',
-      header: 'Level',
-      render: (student: Student) => formatLevel(student.currentLevel),
-    },
-    {
-      key: 'admissionYear',
-      header: 'Admission Year',
-    },
-    {
-      key: 'actions',
-      header: 'Actions',
-      render: (student: Student) => (
-        <div className="flex items-center gap-2">
-          <Link
-            href={`/students/${student.id}`}
-            className="p-1 text-gray-500 hover:text-primary-600"
-            title="View Details"
-          >
-            <EyeIcon className="h-5 w-5" />
-          </Link>
-          <button
-            onClick={() => handleDelete(student.id)}
-            className="p-1 text-gray-500 hover:text-red-600"
-            title="Delete"
-          >
-            <TrashIcon className="h-5 w-5" />
-          </button>
-        </div>
-      ),
-    },
-  ];
+  useEffect(() => { if (user) fetch(); }, [user, fetch]);
 
   return (
-    <div className="space-y-6 animate-fadeIn">
+    <div className="space-y-4 p-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Students</h1>
-          <p className="text-gray-500">Manage students in your department</p>
-        </div>
-        <div className="flex gap-3">
-          {user?.role === 'HOD' && (
-            <>
-              <Button variant="outline" onClick={() => setShowBulkUpdate(!showBulkUpdate)}>
-                <ArrowUpCircleIcon className="h-5 w-5 mr-2" />
-                {showBulkUpdate ? 'Hide' : 'Bulk Update Level'}
-              </Button>
-              <Link href="/students/upload">
-                <Button variant="outline">
-                  <CloudArrowUpIcon className="h-5 w-5 mr-2" />
-                  Bulk Import
-                </Button>
-              </Link>
-              <Link href="/students/new">
-                <Button>
-                  <PlusIcon className="h-5 w-5 mr-2" />
-                  Add Student
-                </Button>
-              </Link>
-            </>
-          )}
-        </div>
+        <h1 className="text-2xl font-bold text-gray-900">Students</h1>
+        <Link href="/students/upload" className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
+          Bulk Import
+        </Link>
       </div>
 
-      {showBulkUpdate && (
-        <Card>
-          <h3 className="text-lg font-semibold mb-4">Bulk Update Student Levels</h3>
-          <BulkLevelUpdate students={students} onSuccess={() => { fetchStudents(); setShowBulkUpdate(false); }} />
-        </Card>
-      )}
+      <input
+        type="text"
+        placeholder="Search by name or matric..."
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
 
-      <Card>
-        <div className="flex flex-wrap gap-4 mb-4">
-          <div className="flex-1 min-w-[200px]">
-            <div className="relative">
-              <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search by name or matric number..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-              />
-            </div>
-          </div>
-          <Select
-            value={levelFilter}
-            onChange={(e) => setLevelFilter(e.target.value)}
-            options={[
-              { value: '', label: 'All Levels' },
-              ...LEVELS.map((l) => ({ value: l, label: formatLevel(l) })),
-            ]}
-            className="w-48"
-          />
+      {loading ? (
+        <p className="text-gray-500 text-sm">Loading...</p>
+      ) : students.length === 0 ? (
+        <p className="text-gray-500 text-sm">No students found.</p>
+      ) : (
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-200 text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                {['Matric No.', 'Name', 'Level', 'Admission Year', ''].map(h => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {students.map(s => (
+                <tr key={s.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3 font-medium text-gray-900">{s.matricNumber}</td>
+                  <td className="px-4 py-3">{s.lastName} {s.firstName}</td>
+                  <td className="px-4 py-3">{s.currentLevel}</td>
+                  <td className="px-4 py-3">{s.admissionYear}</td>
+                  <td className="px-4 py-3">
+                    <Link href={`/students/${s.id}`} className="text-blue-600 hover:underline text-xs">View</Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-
-        <Table
-          columns={columns}
-          data={students}
-          keyExtractor={(student) => student.id}
-          isLoading={isLoading}
-          emptyMessage="No students found"
-        />
-
-        {total > limit && (
-          <div className="mt-4 flex justify-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page === 1}
-              onClick={() => setPage(p => p - 1)}
-            >
-              Previous
-            </Button>
-            <span className="px-4 py-2 text-sm text-gray-600">
-              Page {page} of {Math.ceil(total / limit)}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= Math.ceil(total / limit)}
-              onClick={() => setPage(p => p + 1)}
-            >
-              Next
-            </Button>
-          </div>
-        )}
-      </Card>
+      )}
     </div>
   );
 }

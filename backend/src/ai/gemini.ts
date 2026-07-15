@@ -210,7 +210,7 @@ async function _geminiValidateWithTools(
          3. If BOTH pass (no issues), call saveResult with matricNumber, departmentCode "${departmentCode}", academicYear, and the courses array
          4. If either check fails, do NOT call saveResult — flag the issues instead
          Process all students. Pass all courses in one call per student — do not call per course.
-         Records: ${JSON.stringify(records)}`;
+         Records: ${JSON.stringify(records.map(({ rawRecord: _, ...r }) => r))}`;
 
   const chat = model.startChat();
   let response = await chat.sendMessage(prompt);
