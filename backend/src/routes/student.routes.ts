@@ -2,11 +2,10 @@
 
 import { Router } from 'express';
 import { studentController } from '../controllers/student.controller.js';
-import { bulkController } from '../controllers/bulk.controller.js';
 import { authenticate, authorize } from '../middleware/auth.middleware.js';
 import { validateBody } from '../middleware/validation.middleware.js';
 import { createStudentSchema, updateStudentSchema } from '../validators/student.validator.js';
-import { uploadExcel, handleMulterError } from '../middleware/upload.middleware.js';
+import { generateStudentTemplate } from '../utils/excel.js';
 
 const router = Router();
 
@@ -20,24 +19,16 @@ router.use(authenticate);
 router.post('/', authorize('HOD'), validateBody(createStudentSchema), studentController.create);
 
 /**
- * @route   POST /api/students/bulk-upload
- * @desc    Bulk import students from Excel file
- * @access  HOD only
- */
-router.post(
-  '/bulk-upload',
-  authorize('HOD'),
-  uploadExcel.single('file'),
-  handleMulterError,
-  bulkController.bulkImportStudents
-);
-
-/**
  * @route   GET /api/students/bulk-upload/template
  * @desc    Download student upload template
  * @access  HOD only
  */
-router.get('/bulk-upload/template', authorize('HOD'), bulkController.downloadStudentTemplate);
+router.get('/bulk-upload/template', authorize('HOD'), (req, res) => {
+  const buffer = generateStudentTemplate();
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename=student_upload_template.xlsx');
+  res.send(buffer);
+});
 
 /**
  * @route   GET /api/students

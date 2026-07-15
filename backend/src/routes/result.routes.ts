@@ -2,11 +2,10 @@
 
 import { Router } from 'express';
 import { resultController } from '../controllers/result.controller.js';
-import { bulkController } from '../controllers/bulk.controller.js';
 import { authenticate, authorize } from '../middleware/auth.middleware.js';
 import { validateBody } from '../middleware/validation.middleware.js';
 import { bulkScoreEntrySchema, updateScoreSchema } from '../validators/result.validator.js';
-import { uploadExcel, handleMulterError } from '../middleware/upload.middleware.js';
+import { generateScoreTemplate } from '../utils/excel.js';
 
 const router = Router();
 
@@ -34,24 +33,16 @@ router.post('/add', authorize('HOD'), resultController.addSingleScore);
 router.delete('/delete/:resultId', authorize('HOD'), resultController.deleteSingleScore);
 
 /**
- * @route   POST /api/results/bulk-upload
- * @desc    Bulk import scores from Excel file
- * @access  HOD only
- */
-router.post(
-  '/bulk-upload',
-  authorize('HOD'),
-  uploadExcel.single('file'),
-  handleMulterError,
-  bulkController.bulkImportScores
-);
-
-/**
  * @route   GET /api/results/bulk-upload/template
  * @desc    Download score upload template
  * @access  HOD only
  */
-router.get('/bulk-upload/template', authorize('HOD'), bulkController.downloadScoreTemplate);
+router.get('/bulk-upload/template', authorize('HOD'), (req, res) => {
+  const buffer = generateScoreTemplate();
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename=score_upload_template.xlsx');
+  res.send(buffer);
+});
 
 /**
  * @route   GET /api/results/student/:studentId
