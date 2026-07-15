@@ -11,6 +11,7 @@ import {
   geminiExtractStudents,
   geminiExtractResults,
   geminiValidateWithTools,
+  geminiVisionExtract,
   ExtractionType,
 } from '../ai/gemini.js';
 import { ReviewItemPayload } from '../types/index.js';
@@ -42,6 +43,13 @@ export async function processUpload(
   academicYear: string,
   res: Response
 ): Promise<void> {
+  // Mark any stale jobs from this user as rejected before starting a new one
+  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+  await prisma.uploadJob.updateMany({
+    where: { uploadedById, status: 'PROCESSING', createdAt: { lt: tenMinutesAgo } },
+    data: { status: 'REJECTED', aiSummary: 'Processing timed out. Please re-upload the file.' },
+  });
+
   // 1. Create UploadJob record
   const job = await prisma.uploadJob.create({
     data: {
@@ -82,10 +90,17 @@ export async function processUpload(
           ? content.text
           : `[IMAGE BASE64 OMITTED — use vision extraction]`;
 
+      let textContent: string;
+      if (content.type === 'image') {
+        textContent = await geminiVisionExtract(content.base64, content.mimeType);
+      } else {
+        textContent = content.text;
+      }
+
       records =
         uploadType === 'students'
-          ? await geminiExtractStudents(content.type === 'image' ? content.base64 : content.text)
-          : await geminiExtractResults(content.type === 'image' ? content.base64 : content.text, academicYear);
+          ? await geminiExtractStudents(textContent)
+          : await geminiExtractResults(textContent, academicYear);
 
       sseWrite(res, 'status', {
         jobId: job.id,
@@ -135,16 +150,21 @@ export async function processUpload(
     // 6. Persist ReviewItems for issues that need human review
     if (needsReview.length > 0) {
       await prisma.reviewItem.createMany({
-        data: needsReview.map((item) => ({
-          uploadJobId: job.id,
-          rowNumber: item.rowNumber,
-          field: item.field,
-          originalValue: item.originalValue,
-          suggestedValue: item.suggestedValue,
-          confidence: item.confidence,
-          issueType: item.issueType,
-          issueDetail: item.issueDetail,
-        })),
+        data: needsReview.map((item) => {
+          // find the original record for this row so commit can reconstruct it
+          const rawRecord = records.find((r: any) => r.rowNumber === item.rowNumber) ?? null;
+          return {
+            uploadJobId: job.id,
+            rowNumber: item.rowNumber,
+            field: item.field,
+            originalValue: item.originalValue,
+            suggestedValue: item.suggestedValue,
+            confidence: item.confidence,
+            issueType: item.issueType,
+            issueDetail: item.issueDetail,
+            rawRecord: rawRecord as any,
+          };
+        }),
       });
     }
 
@@ -164,6 +184,8 @@ export async function processUpload(
         issuesFixed: autoFixed.length,
         issuesPending: needsReview.length,
         aiSummary,
+        rawRecords: records as any,
+        academicYear,
       },
     });
 

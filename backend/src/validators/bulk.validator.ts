@@ -81,15 +81,15 @@ export function validateAcademicYear(yearStr: string): boolean {
 }
 
 /**
- * Validate matric number format matches department code
+ * Validate matric number format — accepts both DEPT/YEAR/NUM and YYYY/NNNN formats
  */
 export function validateMatricNumberFormat(matricNumber: string, departmentCode: string): boolean {
-  // Expected format: DEPT/YEAR/NUM (e.g., CSC/2023/001)
+  // YYYY/NNNN format (results upload): e.g. 2025/5337
+  if (/^\d{4}\/\d+$/.test(matricNumber)) return true;
+  // DEPT/YEAR/NUM format (student upload): e.g. CSC/2023/001
   const parts = matricNumber.split('/');
   if (parts.length < 2) return false;
-  
-  const deptPart = parts[0].toUpperCase();
-  return deptPart === departmentCode.toUpperCase();
+  return parts[0].toUpperCase() === departmentCode.toUpperCase();
 }
 
 /**

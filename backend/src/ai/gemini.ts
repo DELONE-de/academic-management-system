@@ -195,7 +195,6 @@ export async function geminiValidateWithTools(
 
       const toolResult = await dispatchToolCall(call.name, call.args as Record<string, any>);
 
-      // Convert failed validations into ReviewItems
       if (call.name === 'validateStudent' && toolResult.valid === false) {
         const record = records.find(
           (r) => r.matricNumber?.toUpperCase() === (call.args as any).matricNumber?.toUpperCase()
@@ -213,10 +212,9 @@ export async function geminiValidateWithTools(
         });
       }
 
-      // validateCourse returns per-course issues
       if (call.name === 'validateCourse' && !toolResult.valid) {
         const record = records.find(
-          (r) => r.departmentCode?.toUpperCase() === (call.args as any).departmentCode?.toUpperCase()
+          (r) => r.matricNumber?.toUpperCase() === (call.args as any).matricNumber?.toUpperCase()
         );
         for (const ci of toolResult.courseIssues ?? []) {
           if (ci.issues.length > 0) {
@@ -233,7 +231,6 @@ export async function geminiValidateWithTools(
         }
       }
 
-      // checkRegistration returns student-level + per-course issues
       if (call.name === 'checkRegistration' && toolResult.valid === false) {
         const record = records.find(
           (r) => r.matricNumber?.toUpperCase() === (call.args as any).matricNumber?.toUpperCase()
@@ -270,7 +267,6 @@ export async function geminiValidateWithTools(
         }
       }
 
-      // saveResult — just log progress, no ReviewItem needed on success
       if (call.name === 'saveResult') {
         if (toolResult.error) {
           const record = records.find(

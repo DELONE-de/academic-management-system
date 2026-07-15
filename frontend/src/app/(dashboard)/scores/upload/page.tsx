@@ -2,7 +2,7 @@
 
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -15,6 +15,7 @@ import {
   ArrowLeftIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
+  ArrowPathIcon,
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -25,6 +26,16 @@ function getAcademicYearOptions(): string[] {
     const y = current - i;
     return `${y}/${y + 1}`;
   });
+}
+
+interface RecoverableJob {
+  id: string;
+  fileName: string;
+  status: string;
+  aiSummary: string | null;
+  issuesPending: number;
+  academicYear: string | null;
+  createdAt: string;
 }
 
 interface UploadResult {
@@ -49,7 +60,17 @@ export default function ScoreBulkUploadPage() {
   const [statusMessages, setStatusMessages] = useState<string[]>([]);
   const [result, setResult] = useState<UploadResult | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [recoverableJobs, setRecoverableJobs] = useState<RecoverableJob[]>([]);
   const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    uploadApi.getJobs().then((jobs) => {
+      const actionable = jobs.filter(
+        (j) => j.status === 'NEEDS_REVIEW' || j.status === 'REJECTED'
+      );
+      setRecoverableJobs(actionable);
+    }).catch(() => {});
+  }, []);
 
   if (user?.role !== 'HOD' && user?.role !== 'EXAMINATION_OFFICER' && user?.role !== 'LECTURER') {
     return (
@@ -142,6 +163,43 @@ export default function ScoreBulkUploadPage() {
           <p className="text-gray-500">Upload a score sheet — AI extracts, validates, and flags issues for review</p>
         </div>
       </div>
+
+      {/* Recoverable jobs banner */}
+      {recoverableJobs.length > 0 && (
+        <div className="space-y-2">
+          {recoverableJobs.map((job) => (
+            <div
+              key={job.id}
+              className={`flex items-start justify-between gap-4 rounded-lg border px-4 py-3 text-sm ${
+                job.status === 'REJECTED'
+                  ? 'bg-red-50 border-red-200 text-red-800'
+                  : 'bg-yellow-50 border-yellow-200 text-yellow-800'
+              }`}
+            >
+              <div className="flex items-start gap-2">
+                {job.status === 'REJECTED' ? (
+                  <ArrowPathIcon className="h-4 w-4 mt-0.5 shrink-0" />
+                ) : (
+                  <ExclamationTriangleIcon className="h-4 w-4 mt-0.5 shrink-0" />
+                )}
+                <div>
+                  <p className="font-medium">{job.fileName}</p>
+                  <p className="text-xs mt-0.5 opacity-80">
+                    {job.status === 'REJECTED'
+                      ? job.aiSummary ?? 'Processing was interrupted. Please re-upload.'
+                      : `${job.issuesPending} item(s) still need your review.`}
+                  </p>
+                </div>
+              </div>
+              {job.status === 'NEEDS_REVIEW' && (
+                <Link href={`/review/${job.id}`} className="shrink-0">
+                  <Button size="sm" variant="outline">Resume Review</Button>
+                </Link>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Step 1 — Academic Year */}
       <Card title="Step 1 — Select Academic Year">

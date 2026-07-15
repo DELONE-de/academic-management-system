@@ -26,9 +26,20 @@ export async function connectDatabase(): Promise<void> {
   try {
     await prisma.$connect();
     console.log('✅ Connected to PostgreSQL database');
+    await recoverStuckJobs();
   } catch (error) {
     console.error('❌ Failed to connect to database:', error);
     process.exit(1);
+  }
+}
+
+async function recoverStuckJobs(): Promise<void> {
+  const stuck = await prisma.uploadJob.updateMany({
+    where: { status: 'PROCESSING' },
+    data: { status: 'REJECTED', aiSummary: 'Processing interrupted by server restart. Please re-upload the file.' },
+  });
+  if (stuck.count > 0) {
+    console.warn(`⚠️  Recovered ${stuck.count} stuck upload job(s) from previous crash`);
   }
 }
 

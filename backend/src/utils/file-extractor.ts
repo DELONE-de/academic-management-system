@@ -33,17 +33,15 @@ export async function extractFileContent(
         const parsed = await pdfParse(buffer);
         const text = parsed.text?.trim();
 
-        // If pdf-parse extracted meaningful text, use it directly
         if (text && text.length > 50) {
           return { type: 'text', text, format: 'pdf' };
         }
 
-        // Image-based PDF — fall through to Gemini vision
+        // Image-based PDF — use Gemini vision once
         const base64 = buffer.toString('base64');
-        await geminiVisionExtract(base64, 'application/pdf');
-        return { type: 'text', text: await geminiVisionExtract(base64, 'application/pdf'), format: 'pdf' };
+        const extracted = await geminiVisionExtract(base64, 'application/pdf');
+        return { type: 'text', text: extracted, format: 'pdf' };
       } catch {
-        // pdf-parse failed — try Gemini vision
         const base64 = buffer.toString('base64');
         const text = await geminiVisionExtract(base64, 'application/pdf');
         return { type: 'text', text, format: 'pdf' };

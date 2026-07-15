@@ -275,6 +275,11 @@ export const uploadApi = {
     const response = await api.get<ApiResponse>(`/upload/${jobId}`);
     return response.data;
   },
+
+  getJobs: async (): Promise<{ id: string; fileName: string; status: string; aiSummary: string | null; issuesPending: number; academicYear: string | null; createdAt: string }[]> => {
+    const response = await api.get<ApiResponse>('/upload');
+    return (response.data as any).data ?? [];
+  },
 };
 
 export const gpaApi = {

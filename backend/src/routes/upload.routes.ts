@@ -78,6 +78,24 @@ router.post(
 );
 
 /**
+ * GET /api/upload
+ * List all upload jobs for the current user
+ */
+router.get('/', async (req: AuthRequest, res: Response) => {
+  const jobs = await prisma.uploadJob.findMany({
+    where: { uploadedById: req.user!.id },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+    select: {
+      id: true, fileName: true, fileType: true, status: true,
+      totalRows: true, issuesFound: true, issuesFixed: true, issuesPending: true,
+      aiSummary: true, academicYear: true, createdAt: true,
+    },
+  });
+  res.json({ success: true, data: jobs });
+});
+
+/**
  * GET /api/upload/:jobId
  * Get upload job status and summary
  */
