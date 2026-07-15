@@ -8,6 +8,7 @@ const NAV = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/students', label: 'Students' },
   { href: '/students/upload', label: 'Import Students' },
+  { href: '/courses', label: 'Courses' },
   { href: '/scores/upload', label: 'Upload Scores' },
   { href: '/gpa', label: 'GPA' },
   { href: '/cgpa', label: 'CGPA' },

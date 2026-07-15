@@ -1,249 +1,238 @@
-// src/app/(dashboard)/courses/page.tsx
-
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
+import { coursesApi } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Select';
-import { Table } from '@/components/ui/Table';
-import { Modal } from '@/components/ui/Modal';
-import { CourseForm } from '@/components/forms/CourseForm';
-import { coursesApi } from '@/lib/api';
-import { Course } from '@/types';
-import { formatLevel, formatSemester, LEVELS, SEMESTERS } from '@/lib/utils';
-import { PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
+
+interface Course {
+  id: string;
+  code: string;
+  title: string;
+  unit: number;
+  level: string;
+  semester: string;
+  isElective: boolean;
+}
+
+const LEVELS = ['LEVEL_100', 'LEVEL_200', 'LEVEL_300', 'LEVEL_400', 'LEVEL_500', 'ND1', 'ND2', 'HND1', 'HND2'];
+const SEMESTERS = ['FIRST', 'SECOND'];
+
+const emptyForm = { code: '', title: '', unit: 3, level: 'LEVEL_100', semester: 'FIRST', isElective: false };
 
 export default function CoursesPage() {
   const { user } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [levelFilter, setLevelFilter] = useState('');
-  const [semesterFilter, setSemesterFilter] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingCourse, setEditingCourse] = useState<Course | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [filterLevel, setFilterLevel] = useState('');
+  const [filterSemester, setFilterSemester] = useState('');
 
-  const fetchCourses = useCallback(async () => {
+  const isHOD = user?.role === 'HOD';
+
+  const load = async () => {
     try {
-      setIsLoading(true);
-      const response = await coursesApi.getAll({
-        departmentId: user?.departmentId || undefined,
-        level: levelFilter || undefined,
-        semester: semesterFilter || undefined,
-      });
-      if (response.success) {
-        setCourses(response.data || []);
-      }
-    } catch (error) {
-      toast.error('Failed to fetch courses');
+      const res = await coursesApi.getAll({ level: filterLevel || undefined, semester: filterSemester || undefined });
+      setCourses((res as any).data ?? []);
+    } catch {
+      toast.error('Failed to load courses');
     } finally {
-      setIsLoading(false);
-    }
-  }, [user?.departmentId, levelFilter, semesterFilter]);
-
-  useEffect(() => {
-    if (user) {
-      fetchCourses();
-    }
-  }, [user, fetchCourses]);
-
-  const handleCreate = async (data: any) => {
-    setIsSubmitting(true);
-    try {
-      const response = await coursesApi.create({
-        ...data,
-        departmentId: user?.departmentId,
-      });
-      if (response.success) {
-        toast.success('Course created successfully');
-        setIsModalOpen(false);
-        fetchCourses();
-      }
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to create course');
-    } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   };
 
-  const handleUpdate = async (data: any) => {
-    if (!editingCourse) return;
-    setIsSubmitting(true);
+  useEffect(() => { load(); }, [filterLevel, filterSemester]);
+
+  const openCreate = () => { setForm(emptyForm); setEditId(null); setShowForm(true); };
+  const openEdit = (c: Course) => {
+    setForm({ code: c.code, title: c.title, unit: c.unit, level: c.level, semester: c.semester, isElective: c.isElective });
+    setEditId(c.id);
+    setShowForm(true);
+  };
+
+  const handleSave = async () => {
+    if (!form.code.trim() || !form.title.trim()) { toast.error('Code and title are required'); return; }
+    setSaving(true);
     try {
-      const response = await coursesApi.update(editingCourse.id, data);
-      if (response.success) {
-        toast.success('Course updated successfully');
-        setIsModalOpen(false);
-        setEditingCourse(null);
-        fetchCourses();
+      if (editId) {
+        await coursesApi.update(editId, form);
+        toast.success('Course updated');
+      } else {
+        await coursesApi.create(form);
+        toast.success('Course created');
       }
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to update course');
+      setShowForm(false);
+      load();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message ?? 'Save failed');
     } finally {
-      setIsSubmitting(false);
+      setSaving(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this course?')) return;
+  const handleDelete = async (id: string, code: string) => {
+    if (!confirm(`Delete ${code}?`)) return;
     try {
       await coursesApi.delete(id);
-      toast.success('Course deleted successfully');
-      fetchCourses();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to delete course');
+      toast.success('Course deleted');
+      load();
+    } catch {
+      toast.error('Delete failed');
     }
   };
-
-  const handleFormSubmit = (data: any) => {
-    if (editingCourse) {
-      return handleUpdate(data);
-    }
-    return handleCreate(data);
-  };
-
-  const columns = [
-    {
-      key: 'code',
-      header: 'Code',
-      render: (course: Course) => (
-        <span className="font-medium text-gray-900">{course.code}</span>
-      ),
-    },
-    {
-      key: 'title',
-      header: 'Title',
-    },
-    {
-      key: 'unit',
-      header: 'Unit',
-      className: 'text-center',
-    },
-    {
-      key: 'level',
-      header: 'Level',
-      render: (course: Course) => formatLevel(course.level),
-    },
-    {
-      key: 'semester',
-      header: 'Semester',
-      render: (course: Course) => formatSemester(course.semester),
-    },
-    {
-      key: 'isElective',
-      header: 'Type',
-      render: (course: Course) => (
-        <span
-          className={`px-2 py-1 text-xs rounded-full ${
-            course.isElective
-              ? 'bg-yellow-100 text-yellow-800'
-              : 'bg-blue-100 text-blue-800'
-          }`}
-        >
-          {course.isElective ? 'Elective' : 'Core'}
-        </span>
-      ),
-    },
-    {
-      key: 'actions',
-      header: 'Actions',
-      render: (course: Course) => (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              setEditingCourse(course);
-              setIsModalOpen(true);
-            }}
-            className="p-1 text-gray-500 hover:text-primary-600"
-            title="Edit"
-          >
-            <PencilIcon className="h-5 w-5" />
-          </button>
-          <button
-            onClick={() => handleDelete(course.id)}
-            className="p-1 text-gray-500 hover:text-red-600"
-            title="Delete"
-          >
-            <TrashIcon className="h-5 w-5" />
-          </button>
-        </div>
-      ),
-    },
-  ];
 
   return (
-    <div className="space-y-6 animate-fadeIn">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Courses</h1>
-          <p className="text-gray-500">Manage courses for your department</p>
+          <p className="text-gray-500 text-sm">{courses.length} course(s) in your department</p>
         </div>
-        {user?.role === 'HOD' && (
-          <Button
-            onClick={() => {
-              setEditingCourse(null);
-              setIsModalOpen(true);
-            }}
-          >
-            <PlusIcon className="h-5 w-5 mr-2" />
-            Add Course
-          </Button>
+        {isHOD && (
+          <Button onClick={openCreate}>+ Add Course</Button>
         )}
       </div>
 
+      {/* Filters */}
+      <div className="flex gap-3">
+        <select
+          value={filterLevel}
+          onChange={(e) => setFilterLevel(e.target.value)}
+          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+        >
+          <option value="">All Levels</option>
+          {LEVELS.map((l) => <option key={l} value={l}>{l.replace('_', ' ')}</option>)}
+        </select>
+        <select
+          value={filterSemester}
+          onChange={(e) => setFilterSemester(e.target.value)}
+          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+        >
+          <option value="">All Semesters</option>
+          {SEMESTERS.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </div>
+
+      {/* Add/Edit form */}
+      {showForm && (
+        <Card title={editId ? 'Edit Course' : 'Add Course'}>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Course Code</label>
+              <input
+                value={form.code}
+                onChange={(e) => setForm({ ...form, code: e.target.value })}
+                placeholder="e.g. HIM 101"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+              <input
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                placeholder="e.g. Introduction to Health Information"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Credit Units</label>
+              <input
+                type="number"
+                min={1}
+                max={6}
+                value={form.unit}
+                onChange={(e) => setForm({ ...form, unit: parseInt(e.target.value) || 1 })}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Level</label>
+              <select
+                value={form.level}
+                onChange={(e) => setForm({ ...form, level: e.target.value })}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                {LEVELS.map((l) => <option key={l} value={l}>{l.replace('_', ' ')}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Semester</label>
+              <select
+                value={form.semester}
+                onChange={(e) => setForm({ ...form, semester: e.target.value })}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                {SEMESTERS.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div className="flex items-center gap-2 pt-6">
+              <input
+                type="checkbox"
+                id="isElective"
+                checked={form.isElective}
+                onChange={(e) => setForm({ ...form, isElective: e.target.checked })}
+                className="rounded"
+              />
+              <label htmlFor="isElective" className="text-sm text-gray-700">Elective</label>
+            </div>
+          </div>
+          <div className="flex gap-3 mt-4">
+            <Button onClick={handleSave} isLoading={saving}>Save</Button>
+            <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
+          </div>
+        </Card>
+      )}
+
+      {/* Course table */}
       <Card>
-        <div className="flex gap-4 mb-4">
-          <Select
-            value={levelFilter}
-            onChange={(e) => setLevelFilter(e.target.value)}
-            options={[
-              { value: '', label: 'All Levels' },
-              ...LEVELS.map((l) => ({ value: l, label: formatLevel(l) })),
-            ]}
-            className="w-48"
-          />
-          <Select
-            value={semesterFilter}
-            onChange={(e) => setSemesterFilter(e.target.value)}
-            options={[
-              { value: '', label: 'All Semesters' },
-              ...SEMESTERS.map((s) => ({ value: s, label: formatSemester(s) })),
-            ]}
-            className="w-48"
-          />
-        </div>
-
-        <Table
-          columns={columns}
-          data={courses}
-          keyExtractor={(course) => course.id}
-          isLoading={isLoading}
-          emptyMessage="No courses found"
-        />
+        {loading ? (
+          <p className="text-sm text-gray-500 py-4 text-center">Loading...</p>
+        ) : courses.length === 0 ? (
+          <p className="text-sm text-gray-500 py-4 text-center">No courses found.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  {['Code', 'Title', 'Units', 'Level', 'Semester', 'Type', ...(isHOD ? ['Actions'] : [])].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {courses.map((c) => (
+                  <tr key={c.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 font-medium text-gray-900">{c.code}</td>
+                    <td className="px-4 py-3 text-gray-700">{c.title}</td>
+                    <td className="px-4 py-3 text-gray-600">{c.unit}</td>
+                    <td className="px-4 py-3 text-gray-600">{c.level.replace('_', ' ')}</td>
+                    <td className="px-4 py-3 text-gray-600">{c.semester}</td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${c.isElective ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>
+                        {c.isElective ? 'Elective' : 'Core'}
+                      </span>
+                    </td>
+                    {isHOD && (
+                      <td className="px-4 py-3">
+                        <div className="flex gap-2">
+                          <button onClick={() => openEdit(c)} className="text-xs text-blue-600 hover:underline">Edit</button>
+                          <button onClick={() => handleDelete(c.id, c.code)} className="text-xs text-red-600 hover:underline">Delete</button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
-
-      <Modal
-        isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          setEditingCourse(null);
-        }}
-        title={editingCourse ? 'Edit Course' : 'Add New Course'}
-        size="lg"
-      >
-        <CourseForm
-          course={editingCourse || undefined}
-          onSubmit={handleFormSubmit}
-          onCancel={() => {
-            setIsModalOpen(false);
-            setEditingCourse(null);
-          }}
-        isLoading={isSubmitting}
-        />
-      </Modal>
     </div>
   );
-}     
+}

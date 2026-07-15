@@ -7,7 +7,12 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Starting database seeding...');
 
-  // Clear existing data
+  // Clear existing data in dependency order
+  await prisma.auditLog.deleteMany();
+  await prisma.batchApproval.deleteMany();
+  await prisma.resultBatch.deleteMany();
+  await prisma.reviewItem.deleteMany();
+  await prisma.uploadJob.deleteMany();
   await prisma.result.deleteMany();
   await prisma.semesterGPA.deleteMany();
   await prisma.student.deleteMany();
