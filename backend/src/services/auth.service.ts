@@ -66,10 +66,10 @@ export class AuthService {
   }
 
   /**
-   * Registers a new user (admin only in production)
+   * Registers a new HOD user
    */
   async register(input: RegisterInput): Promise<any> {
-    const { email, password, firstName, lastName, role, departmentId, facultyId } = input;
+    const { email, password, firstName, lastName, role, departmentId } = input;
 
     // Check if email already exists
     const existingUser = await prisma.user.findUnique({
@@ -80,13 +80,13 @@ export class AuthService {
       throw new AppError('Email already registered', 400);
     }
 
-    // Validate role-specific requirements
-    if (role === 'HOD' && !departmentId) {
-      throw new AppError('Department ID is required for HOD role', 400);
-    }
+    // Verify department exists
+    const department = await prisma.department.findUnique({
+      where: { id: departmentId },
+    });
 
-    if (role === 'DEAN' && !facultyId) {
-      throw new AppError('Faculty ID is required for DEAN role', 400);
+    if (!department) {
+      throw new AppError('Department not found', 404);
     }
 
     // Hash password
@@ -100,14 +100,10 @@ export class AuthService {
         firstName,
         lastName,
         role,
-        departmentId: role === 'HOD' ? departmentId : undefined,
-        facultyId: role === 'DEAN' ? facultyId : undefined,
+        departmentId,
       },
       include: {
         department: {
-          select: { id: true, name: true, code: true },
-        },
-        faculty: {
           select: { id: true, name: true, code: true },
         },
       },

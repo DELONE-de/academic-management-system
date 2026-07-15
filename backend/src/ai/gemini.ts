@@ -8,11 +8,22 @@ import {
 } from '@google/generative-ai';
 import { validationFunctionDeclarations, dispatchToolCall } from './validation.tools.js';
 import { ReviewItemPayload } from '../types/index.js';
+import {
+  groqExtractStudents,
+  groqExtractResults,
+  groqValidateWithTools,
+  groqExplainGPA,
+} from './groq.js';
+
+function isQuotaError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.includes('429') || msg.includes('quota') || msg.includes('Too Many Requests');
+}
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 // Flash is free tier: 15 req/min, 1M req/day
-const MODEL = 'gemini-1.5-flash';
+const MODEL = 'gemini-2.0-flash';
 
 const SAFETY = [
   { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
@@ -75,10 +86,10 @@ export interface ExtractedResult {
 export async function geminiExtractStudents(
   content: string
 ): Promise<ExtractedStudent[]> {
-  const model = genAI.getGenerativeModel({ model: MODEL, safetySettings: SAFETY });
-
-  const result = await model.generateContent([
-    `You are extracting student records from the following content.
+  try {
+    const model = genAI.getGenerativeModel({ model: MODEL, safetySettings: SAFETY });
+    const result = await model.generateContent([
+      `You are extracting student records from the following content.
      Return a JSON array of student objects with these fields:
      rowNumber, matricNumber, firstName, lastName, departmentCode, admissionYear, studentLevel, email (optional), confidence (0.0-1.0).
      
@@ -92,13 +103,15 @@ export async function geminiExtractStudents(
      
      Content:
      ${content}`,
-  ]);
-
-  try {
+    ]);
     const text = result.response.text().trim();
     const json = text.replace(/^```json\n?/, '').replace(/\n?```$/, '');
     return JSON.parse(json);
-  } catch {
+  } catch (err) {
+    if (isQuotaError(err)) {
+      console.warn('⚠️  Gemini quota exceeded — falling back to Groq');
+      return groqExtractStudents(content);
+    }
     return [];
   }
 }
@@ -107,10 +120,10 @@ export async function geminiExtractResults(
   content: string,
   academicYear: string
 ): Promise<ExtractedResult[]> {
-  const model = genAI.getGenerativeModel({ model: MODEL, safetySettings: SAFETY });
-
-  const result = await model.generateContent([
-    `You are extracting student score records from the following content.
+  try {
+    const model = genAI.getGenerativeModel({ model: MODEL, safetySettings: SAFETY });
+    const result = await model.generateContent([
+      `You are extracting student score records from the following content.
      Each student can have MULTIPLE courses and scores.
      Matric number format is YYYY/NNNN e.g. 2025/5337 — extract exactly as written.
      The academic year for ALL records is "${academicYear}" — do not read it from the content.
@@ -137,13 +150,15 @@ export async function geminiExtractResults(
      
      Content:
      ${content}`,
-  ]);
-
-  try {
+    ]);
     const text = result.response.text().trim();
     const json = text.replace(/^```json\n?/, '').replace(/\n?```$/, '');
     return JSON.parse(json);
-  } catch {
+  } catch (err) {
+    if (isQuotaError(err)) {
+      console.warn('⚠️  Gemini quota exceeded — falling back to Groq');
+      return groqExtractResults(content, academicYear);
+    }
     return [];
   }
 }
@@ -154,6 +169,23 @@ export async function geminiExtractResults(
 // ============================================================
 
 export async function geminiValidateWithTools(
+  records: any[],
+  type: ExtractionType,
+  departmentCode: string,
+  onProgress?: (message: string) => void
+): Promise<ReviewItemPayload[]> {
+  try {
+    return await _geminiValidateWithTools(records, type, departmentCode, onProgress);
+  } catch (err) {
+    if (isQuotaError(err)) {
+      console.warn('⚠️  Gemini quota exceeded — falling back to Groq');
+      return groqValidateWithTools(records, type, departmentCode, onProgress);
+    }
+    throw err;
+  }
+}
+
+async function _geminiValidateWithTools(
   records: any[],
   type: ExtractionType,
   departmentCode: string,
@@ -307,17 +339,23 @@ export async function geminiExplainGPA(data: {
   totalUnits: number;
   totalPoints: number;
 }): Promise<string> {
-  const model = genAI.getGenerativeModel({ model: MODEL, safetySettings: SAFETY });
-
-  const result = await model.generateContent([
-    `Explain in 2-3 plain sentences why ${data.studentName} has a GPA of ${data.gpa.toFixed(2)}.
+  try {
+    const model = genAI.getGenerativeModel({ model: MODEL, safetySettings: SAFETY });
+    const result = await model.generateContent([
+      `Explain in 2-3 plain sentences why ${data.studentName} has a GPA of ${data.gpa.toFixed(2)}.
      
      Results: ${JSON.stringify(data.results)}
      Total units: ${data.totalUnits}, Total quality points: ${data.totalPoints.toFixed(2)}
      
      Be specific — mention the courses that pulled the GPA up or down.
      Write for a non-technical audience (lecturers, HODs).`,
-  ]);
-
-  return result.response.text();
+    ]);
+    return result.response.text();
+  } catch (err) {
+    if (isQuotaError(err)) {
+      console.warn('⚠️  Gemini quota exceeded — falling back to Groq');
+      return groqExplainGPA(data);
+    }
+    return '';
+  }
 }
