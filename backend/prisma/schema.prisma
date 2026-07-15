@@ -5,9 +5,11 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+  // The `url` datasource property is no longer supported in Prisma schema files.
+  // Move connection URLs for Migrate to prisma.config.ts and configure the
+  // PrismaClient (adapter/accelerateUrl) in application code. See:
+  // https://pris.ly/d/config-datasource
 }
 
 // ============================================
