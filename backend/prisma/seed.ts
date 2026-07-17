@@ -392,7 +392,7 @@ async function main() {
   // Health Information Management Students - LEVEL 100, Admission Year 2024
   await prisma.student.create({
     data: {
-      matricNumber: 'HIM/2024/1813',
+      matricNumber: '2024/1813',
       firstName: 'Alawode',
       lastName: 'Adebusola Peace',
       currentLevel: 'LEVEL_100',
@@ -404,7 +404,7 @@ async function main() {
 
   await prisma.student.create({
     data: {
-      matricNumber: 'HIM/2024/3272',
+      matricNumber: '2024/3272',
       firstName: 'Nurudeen',
       lastName: 'Aishat Olanike',
       currentLevel: 'LEVEL_100',
@@ -416,7 +416,7 @@ async function main() {
 
   await prisma.student.create({
     data: {
-      matricNumber: 'HIM/2024/1842',
+      matricNumber: '2024/1842',
       firstName: 'Abdulazeez',
       lastName: 'Aishat Wuraola',
       currentLevel: 'LEVEL_100',
@@ -428,7 +428,7 @@ async function main() {
 
   await prisma.student.create({
     data: {
-      matricNumber: 'HIM/2024/0715',
+      matricNumber: '2024/0715',
       firstName: 'Uwedone',
       lastName: 'Bose Gloria',
       currentLevel: 'LEVEL_100',
@@ -440,7 +440,7 @@ async function main() {
 
   await prisma.student.create({
     data: {
-      matricNumber: 'HIM/2024/1916',
+      matricNumber: '2024/1916',
       firstName: 'Igbelleh',
       lastName: 'Daniella',
       currentLevel: 'LEVEL_100',
@@ -452,7 +452,7 @@ async function main() {
 
   await prisma.student.create({
     data: {
-      matricNumber: 'HIM/2024/0276',
+      matricNumber: '2024/0276',
       firstName: 'Akinlade',
       lastName: 'Dolapo Anointed',
       currentLevel: 'LEVEL_100',
@@ -464,7 +464,7 @@ async function main() {
 
   await prisma.student.create({
     data: {
-      matricNumber: 'HIM/2024/3426',
+      matricNumber: '2024/3426',
       firstName: 'Adekanmi',
       lastName: 'Folasade Oluwadarasimi',
       currentLevel: 'LEVEL_100',
@@ -476,7 +476,7 @@ async function main() {
 
   await prisma.student.create({
     data: {
-      matricNumber: 'HIM/2024/2231',
+      matricNumber: '2024/2231',
       firstName: 'Aderinto',
       lastName: 'hikmoh Adekemi',
       currentLevel: 'LEVEL_100',
@@ -488,7 +488,7 @@ async function main() {
 
   await prisma.student.create({
     data: {
-      matricNumber: 'HIM/2024/1473',
+      matricNumber: '2024/1473',
       firstName: 'Alimi',
       lastName: 'Isiamiat Omolara',
       currentLevel: 'LEVEL_100',
@@ -500,7 +500,7 @@ async function main() {
 
   await prisma.student.create({
     data: {
-      matricNumber: 'HIM/2024/0321',
+      matricNumber: '2024/0321',
       firstName: 'Sunday',
       lastName: 'Mary Funmilayo',
       currentLevel: 'LEVEL_100',
@@ -512,7 +512,7 @@ async function main() {
 
   await prisma.student.create({
     data: {
-      matricNumber: 'HIM/2024/1850',
+      matricNumber: '2024/1850',
       firstName: 'Iehunwa',
       lastName: 'Mercy Olayemi',
       currentLevel: 'LEVEL_100',
@@ -524,7 +524,7 @@ async function main() {
 
   await prisma.student.create({
     data: {
-      matricNumber: 'HIM/2024/2170',
+      matricNumber: '2024/2170',
       firstName: 'Olanite',
       lastName: 'Nafisat Eniola',
       currentLevel: 'LEVEL_100',
@@ -536,7 +536,7 @@ async function main() {
 
   await prisma.student.create({
     data: {
-      matricNumber: 'HIM/2024/2943',
+      matricNumber: '2024/2943',
       firstName: 'Ayetimiyi',
       lastName: 'Oladuni Esther',
       currentLevel: 'LEVEL_100',
@@ -548,7 +548,7 @@ async function main() {
 
   await prisma.student.create({
     data: {
-      matricNumber: 'HIM/2024/3036',
+      matricNumber: '2024/3036',
       firstName: 'Dada',
       lastName: 'Oluwanifemi Oluwabukunmi',
       currentLevel: 'LEVEL_100',
@@ -560,7 +560,7 @@ async function main() {
 
   await prisma.student.create({
     data: {
-      matricNumber: 'HIM/2024/1474',
+      matricNumber: '2024/1474',
       firstName: 'Oyewole',
       lastName: 'Opeyemi Elizabeth',
       currentLevel: 'LEVEL_100',
@@ -572,7 +572,7 @@ async function main() {
 
   await prisma.student.create({
     data: {
-      matricNumber: 'HIM/2024/1862',
+      matricNumber: '2024/1862',
       firstName: 'Adetula',
       lastName: 'Praises Adewura',
       currentLevel: 'LEVEL_100',
@@ -584,7 +584,7 @@ async function main() {
 
   await prisma.student.create({
     data: {
-      matricNumber: 'HIM/2024/1295',
+      matricNumber: '2024/1295',
       firstName: 'Adebiyi',
       lastName: 'PraiseGod Ibukunoluwa',
       currentLevel: 'LEVEL_100',
@@ -596,7 +596,7 @@ async function main() {
 
   await prisma.student.create({
     data: {
-      matricNumber: 'HIM/2024/3268',
+      matricNumber: '2024/3268',
       firstName: 'Oyeleye',
       lastName: 'Tobiloba Olamide',
       currentLevel: 'LEVEL_100',
@@ -608,7 +608,7 @@ async function main() {
 
   await prisma.student.create({
     data: {
-      matricNumber: 'HIM/2024/0859',
+      matricNumber: '2024/0859',
       firstName: 'Akinmoladun',
       lastName: 'Yosola Precoius',
       currentLevel: 'LEVEL_100',

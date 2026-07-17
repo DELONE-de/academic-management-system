@@ -397,24 +397,10 @@ export async function saveResult(args: {
 // ============================================================
 
 async function resolveStudent(matricNumber: string, departmentCode: string) {
-  // Try exact match first (already full format)
-  let student = await prisma.student.findUnique({
+  return prisma.student.findUnique({
     where: { matricNumber: matricNumber.toUpperCase() },
     select: { id: true, departmentId: true, department: { select: { code: true } } },
   });
-  if (student) return student;
-
-  // Short format YYYY/NNNN — try DEPT/YEAR/NUM
-  if (/^\d{4}\/\d+$/.test(matricNumber)) {
-    const full = `${departmentCode.toUpperCase()}/${matricNumber}`;
-    student = await prisma.student.findUnique({
-      where: { matricNumber: full },
-      select: { id: true, departmentId: true, department: { select: { code: true } } },
-    });
-    if (student) return student;
-  }
-
-  return null;
 }
 
 // Dispatcher — called by upload service when Gemini returns a function call
