@@ -29,6 +29,7 @@ export default function SetupPage() {
   const [departments, setDepartments] = useState<any[]>([]);
   const [faculties, setFaculties] = useState<any[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const isDean = isAuthenticated && user?.role === 'DEAN';
 
@@ -38,11 +39,13 @@ export default function SetupPage() {
   });
 
   const fetchDepartments = async () => {
+    setFetchError(null);
     try {
       const res = await departmentsApi.getAll();
-      if (res.success) setDepartments(res.data || []);
+      if (res.data) setDepartments(res.data);
+      if (res.error) setFetchError(res.error);
     } catch {
-      toast.error('Failed to load departments');
+      setFetchError('Failed to load departments');
     }
   };
 
@@ -54,15 +57,17 @@ export default function SetupPage() {
     if (isAuthenticated) {
       fetchDepartments();
       departmentsApi.getAll().then((res) => {
-        const uniqueFaculties = Array.from(
-          new Map(
-            (res.data ?? [])
-              .filter((d: any) => d.faculty)
-              .map((d: any) => [d.faculty.id, d.faculty])
-          ).values()
-        );
-        setFaculties(uniqueFaculties);
-      }).catch(() => {});
+        if (res.data) {
+          const uniqueFaculties = Array.from(
+            new Map(
+              res.data
+                .filter((d: any) => d.faculty)
+                .map((d: any) => [d.faculty.id, d.faculty])
+            ).values()
+          );
+          setFaculties(uniqueFaculties);
+        }
+      });
     }
   }, [isAuthenticated, isLoading, router]);
 
@@ -70,13 +75,15 @@ export default function SetupPage() {
     setIsSubmitting(true);
     try {
       const res = await departmentsApi.createPublic(data);
-      if (res.success) {
+      if (res.data) {
         toast.success('Department created');
         form.reset({ passMark: 40, facultyId: data.facultyId });
         fetchDepartments();
+      } else {
+        toast.error(res.error || 'Failed to create department');
       }
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to create department');
+    } catch {
+      toast.error('Failed to create department');
     } finally {
       setIsSubmitting(false);
     }
@@ -85,11 +92,12 @@ export default function SetupPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this department? This will remove all associated students, courses and results.')) return;
     try {
-      await departmentsApi.deletePublic(id);
-      toast.success('Department deleted');
+      const res = await departmentsApi.deletePublic(id);
+      if (res.error) toast.error(res.error);
+      else toast.success('Department deleted');
       fetchDepartments();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to delete department');
+    } catch {
+      toast.error('Failed to delete department');
     }
   };
 
@@ -128,6 +136,12 @@ export default function SetupPage() {
             <h1 className="text-3xl font-bold text-gray-900">Department Management</h1>
             <p className="mt-2 text-gray-500">Create and manage departments (Dean only)</p>
           </div>
+
+          {fetchError && (
+            <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+              {fetchError}
+            </div>
+          )}
 
           <form onSubmit={form.handleSubmit(handleCreate)} className="grid grid-cols-2 gap-3 mb-6">
             <Input
@@ -171,7 +185,7 @@ export default function SetupPage() {
           </form>
 
           <div className="divide-y divide-gray-100">
-            {departments.length === 0 && (
+            {departments.length === 0 && !fetchError && (
               <p className="text-center text-gray-400 py-6">No departments yet</p>
             )}
             {departments.map((d) => (

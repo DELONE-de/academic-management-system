@@ -34,7 +34,7 @@ export default function DepartmentsPage() {
 
       try {
         const response = await reportsApi.getFacultyStats();
-        if (response.success) {
+        if (response.data) {
           setFacultyStats(response.data);
         }
       } catch (error) {

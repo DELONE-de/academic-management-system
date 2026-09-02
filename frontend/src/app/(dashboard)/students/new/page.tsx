@@ -23,7 +23,7 @@ export default function NewStudentPage() {
         ...data,
         departmentId: user?.departmentId,
       });
-      if (response.success) {
+      if (response.data) {
         toast.success('Student created successfully');
         router.push('/students');
       }

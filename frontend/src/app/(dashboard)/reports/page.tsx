@@ -23,7 +23,7 @@ export default function ReportsPage() {
     setLoading(true);
     try {
       const r = await reportsApi.getDepartmentReport(user.departmentId, { level, semester, academicYear: year });
-      if (r.success) setReport(r.data);
+      if (r.data) setReport(r.data);
     } catch { toast.error('Failed to generate report'); }
     finally { setLoading(false); }
   };

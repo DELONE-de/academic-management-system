@@ -10,18 +10,28 @@ export default function StudentDetailPage() {
   const [student, setStudent] = useState<any>(null);
   const [history, setHistory] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
       studentsApi.getById(id),
       gpaApi.getStudentGPAHistory(id),
     ]).then(([s, g]) => {
-      if (s.success) setStudent(s.data);
-      if (g.success) setHistory(g.data);
-    }).finally(() => setLoading(false));
+      if (s.data) setStudent(s.data);
+      if (s.error) setError(s.error);
+      if (g.data) setHistory(g.data);
+    }).catch(() => setError('Failed to load student details'))
+      .finally(() => setLoading(false));
   }, [id]);
 
-  if (loading) return <p className="p-6 text-gray-500">Loading...</p>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+      </div>
+    );
+  }
+  if (error) return <p className="p-6 text-red-600">{error}</p>;
   if (!student) return <p className="p-6 text-gray-500">Student not found.</p>;
 
   return (

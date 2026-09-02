@@ -59,6 +59,27 @@ const ISSUE_COLORS: Record<string, string> = {
   unregistered: 'bg-purple-100 text-purple-700',
 };
 
+// Confidence bands — HIGH / MEDIUM / LOW. Text labels are shown alongside color
+// so confidence is never communicated by color alone (accessibility).
+function confidenceBand(confidence: number): { label: string; classes: string; bar: string } {
+  if (confidence >= 0.9) return { label: 'High', classes: 'bg-green-100 text-green-800', bar: 'bg-green-500' };
+  if (confidence >= 0.7) return { label: 'Medium', classes: 'bg-yellow-100 text-yellow-800', bar: 'bg-yellow-500' };
+  return { label: 'Low', classes: 'bg-red-100 text-red-800', bar: 'bg-red-500' };
+}
+
+function ConfidenceIndicator({ confidence }: { confidence: number }) {
+  const band = confidenceBand(confidence);
+  const pct = Math.round(confidence * 100);
+  return (
+    <div className="flex items-center gap-2" aria-label={`Confidence: ${pct}%, ${band.label}`}>
+      <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden" role="presentation">
+        <div className={`h-full rounded-full ${band.bar}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${band.classes}`}>{pct}% {band.label}</span>
+    </div>
+  );
+}
+
 export default function ReviewCenterPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const [job, setJob] = useState<UploadJob | null>(null);
@@ -69,11 +90,16 @@ export default function ReviewCenterPage() {
   const [approvingAll, setApprovingAll] = useState(false);
 
   const fetchJob = useCallback(async () => {
+    setLoading(true);
     try {
       const res = await reviewApi.getJob(jobId);
+      if (res.error) {
+        toast.error(res.error);
+        return;
+      }
       setJob(res.data);
     } catch {
-      toast.error('Failed to load review items');
+      toast.error('Failed to load review items. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -84,23 +110,25 @@ export default function ReviewCenterPage() {
   const resolve = async (itemId: string, resolution: 'accepted' | 'rejected' | 'edited', correctedValue?: string) => {
     setResolving(itemId);
     try {
-      await reviewApi.resolveItem(itemId, resolution, correctedValue);
+      const res = await reviewApi.resolveItem(itemId, resolution, correctedValue);
+      if (res.error) { toast.error(res.error); return; }
       setEditingId(null);
       await fetchJob();
       toast.success(resolution === 'accepted' ? 'Accepted' : resolution === 'rejected' ? 'Rejected' : 'Edited & saved');
     } catch {
-      toast.error('Failed to resolve item');
+      toast.error('Failed to resolve item. Please try again.');
     } finally {
       setResolving(null);
     }
   };
 
   const approveAll = async () => {
+    if (!window.confirm(`Accept all ${pending.length} pending items? This will commit all AI suggestions.`)) return;
     setApprovingAll(true);
     try {
       const res = await reviewApi.approveAll(jobId);
       await fetchJob();
-      toast.success(res.message);
+      toast.success(res.data?.message || 'All items approved');
     } catch {
       toast.error('Failed to approve all');
     } finally {
@@ -109,11 +137,22 @@ export default function ReviewCenterPage() {
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64 text-gray-500">Loading review items...</div>;
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+      </div>
+    );
   }
 
   if (!job) {
-    return <div className="text-center py-12 text-gray-500">Upload job not found.</div>;
+    return (
+      <div className="text-center py-12">
+        <p className="text-gray-500">Upload job not found.</p>
+        <Link href="/scores/upload" className="text-blue-600 hover:underline text-sm mt-2 inline-block">
+          Back to uploads
+        </Link>
+      </div>
+    );
   }
 
   const pending = job.reviewItems.filter((i) => !i.isResolved);
@@ -176,7 +215,7 @@ export default function ReviewCenterPage() {
                         {ISSUE_LABELS[item.issueType] ?? item.issueType}
                       </span>
                       <span className="text-xs text-gray-400">field: {item.field}</span>
-                      <span className="text-xs text-gray-400">confidence: {Math.round(item.confidence * 100)}%</span>
+                      <ConfidenceIndicator confidence={item.confidence} />
                     </div>
                     <p className="text-sm text-gray-700 mt-1">{item.issueDetail}</p>
                     <div className="flex items-center gap-3 mt-1 text-sm">

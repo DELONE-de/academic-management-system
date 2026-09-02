@@ -29,7 +29,7 @@ export default function GPAPage() {
         semester: semester || undefined,
         academicYear: year || undefined,
       });
-      if (r.success) setStats(r.data);
+      if (r.data) setStats(r.data);
     } catch { setError('Failed to load stats'); }
     finally { setLoading(false); }
   };

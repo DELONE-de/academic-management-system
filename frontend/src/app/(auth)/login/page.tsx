@@ -2,27 +2,30 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '@/hooks/useAuth';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { AcademicCapIcon } from '@heroicons/react/24/outline';
+import { AcademicCapIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
 });
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
-export default function LoginPage() {
+function LoginFormInner() {
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   const {
     register,
@@ -33,17 +36,18 @@ export default function LoginPage() {
   });
 
   useEffect(() => {
+    if (searchParams?.get('expired')) setSessionExpired(true);
     if (isAuthenticated) {
       router.push('/dashboard');
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, router, searchParams]);
 
   const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
     try {
       await login(data.email, data.password);
     } catch (error) {
-      // Error handled in context
+      // Error already handled in AuthContext
     } finally {
       setIsLoading(false);
     }
@@ -69,9 +73,15 @@ export default function LoginPage() {
             </div>
             <h2 className="text-3xl font-bold text-gray-900">Welcome Back</h2>
             <p className="mt-2 text-gray-600">
-              GPA/CGPA Academic Management System
+              AcadMind AI — Academic Management System
             </p>
           </div>
+
+          {sessionExpired && (
+            <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800" role="alert">
+              Your session has expired. Please sign in again.
+            </div>
+          )}
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             <Input
@@ -83,20 +93,46 @@ export default function LoginPage() {
               required
             />
 
-            <Input
-              label="Password"
-              type="password"
-              autoComplete="current-password"
-              error={errors.password?.message}
-              {...register('password')}
-              required
-            />
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                Password
+              </label>
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  aria-invalid={!!errors.password}
+                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 ${
+                    errors.password ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  {...register('password')}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? (
+                    <EyeSlashIcon className="h-5 w-5" />
+                  ) : (
+                    <EyeIcon className="h-5 w-5" />
+                  )}
+                </button>
+              </div>
+              {errors.password && (
+                <p className="text-red-500 text-xs mt-1">{errors.password.message}</p>
+              )}
+            </div>
 
             <Button
               type="submit"
               className="w-full"
               size="lg"
               isLoading={isLoading}
+              disabled={isLoading}
             >
               Sign In
             </Button>
@@ -110,10 +146,16 @@ export default function LoginPage() {
               </a>
             </p>
           </div>
-
-
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-100"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600" /></div>}>
+      <LoginFormInner />
+    </Suspense>
   );
 }

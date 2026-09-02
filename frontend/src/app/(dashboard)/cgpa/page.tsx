@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { studentsApi, gpaApi } from '@/lib/api';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
 
 export default function CGPAPage() {
   const { user } = useAuth();
@@ -13,12 +14,17 @@ export default function CGPAPage() {
   const [loading, setLoading] = useState(true);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [search, setSearch] = useState('');
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const fetchStudents = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const r = await studentsApi.getAll({ departmentId: user?.departmentId, search: search || undefined, limit: 50 });
-      if (r.success) setStudents(r.data || []);
+      if (r.data) setStudents(r.data);
+      if (r.error) setLoadError(r.error);
+    } catch {
+      setLoadError('Failed to load students');
     } finally { setLoading(false); }
   }, [user?.departmentId, search]);
 
@@ -28,7 +34,10 @@ export default function CGPAPage() {
     setSelected(id); setLoadingHistory(true);
     try {
       const r = await gpaApi.getStudentGPAHistory(id);
-      if (r.success) setHistory(r.data);
+      if (r.data) setHistory(r.data);
+      if (r.error) toast.error(r.error);
+    } catch {
+      toast.error('Failed to load GPA history');
     } finally { setLoadingHistory(false); }
   };
 
@@ -39,10 +48,19 @@ export default function CGPAPage() {
 
         {/* Student list */}
         <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-          <input type="text" placeholder="Search..." value={search}
+          <input type="text" placeholder="Search by name or matric..." value={search}
             onChange={e => setSearch(e.target.value)}
+            aria-label="Search students"
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          {loading ? <p className="text-sm text-gray-500">Loading...</p> : (
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+            </div>
+          ) : loadError ? (
+            <p className="text-sm text-red-600 text-center py-4">{loadError}</p>
+          ) : students.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-4">No students found. Try changing the search.</p>
+          ) : (
             <div className="space-y-1 max-h-[500px] overflow-y-auto">
               {students.map(s => (
                 <button key={s.id} onClick={() => selectStudent(s.id)}
@@ -60,7 +78,9 @@ export default function CGPAPage() {
         {/* GPA detail */}
         <div className="lg:col-span-2">
           {loadingHistory ? (
-            <p className="text-gray-500 text-sm">Loading...</p>
+            <div className="flex items-center justify-center h-40">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+            </div>
           ) : history ? (
             <div className="space-y-4">
               <div className="bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between">
@@ -75,7 +95,7 @@ export default function CGPAPage() {
               </div>
 
               {history.semesterGpas.length > 0 && (
-                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
                   <div className="px-4 py-3 border-b border-gray-200 font-semibold text-gray-900 text-sm">Semester History</div>
                   <table className="min-w-full divide-y divide-gray-100 text-sm">
                     <thead className="bg-gray-50">

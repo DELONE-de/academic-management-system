@@ -48,7 +48,8 @@ export default function StudentBulkUploadPage() {
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    uploadApi.getJobs().then((jobs) => {
+    uploadApi.getJobs().then((res) => {
+      const jobs = res.data || [];
       setRecoverableJobs(
         jobs.filter((j) => j.status === 'NEEDS_REVIEW' || j.status === 'REJECTED')
       );
@@ -84,7 +85,7 @@ export default function StudentBulkUploadPage() {
     abortRef.current = new AbortController();
 
     try {
-      const response = await uploadApi.streamUpload(file, 'students', '');
+      const { response } = await uploadApi.streamUpload(file, 'students', '');
 
       if (!response.ok || !response.body) {
         const err = await response.json().catch(() => ({ message: 'Upload failed' }));

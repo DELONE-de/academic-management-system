@@ -78,7 +78,7 @@ export default function CoursesPage() {
   const handleDelete = async (id: string, code: string) => {
     if (!confirm(`Delete ${code}?`)) return;
     try {
-      await coursesApi.delete(id);
+      await coursesApi.remove(id);
       toast.success('Course deleted');
       load();
     } catch {

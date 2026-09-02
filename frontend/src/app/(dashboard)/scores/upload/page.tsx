@@ -7,8 +7,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { FileUpload } from '@/components/ui/FileUpload';
-import { uploadApi, resultsApi } from '@/lib/api';
+import { uploadApi, resultsApi, gpaApi } from '@/lib/api';
 import { downloadBlob } from '@/lib/utils';
+import { friendlyMessage } from '@/lib/errors';
 import {
   ArrowDownTrayIcon,
   CloudArrowUpIcon,
@@ -64,7 +65,8 @@ export default function ScoreBulkUploadPage() {
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    uploadApi.getJobs().then((jobs) => {
+    uploadApi.getJobs().then((res) => {
+      const jobs = res.data || [];
       const actionable = jobs.filter(
         (j) => j.status === 'NEEDS_REVIEW' || j.status === 'REJECTED'
       );
@@ -101,7 +103,7 @@ export default function ScoreBulkUploadPage() {
     abortRef.current = new AbortController();
 
     try {
-      const response = await uploadApi.streamUpload(file, 'results', academicYear);
+      const { response } = await uploadApi.streamUpload(file, 'results', academicYear);
 
       if (!response.ok || !response.body) {
         const err = await response.json().catch(() => ({ message: 'Upload failed' }));

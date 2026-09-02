@@ -9,13 +9,18 @@ export default function StudentsPage() {
   const { user } = useAuth();
   const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
   const fetch = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const r = await studentsApi.getAll({ departmentId: user?.departmentId, search: search || undefined, limit: 50 });
-      if (r.success) setStudents(r.data || []);
+      if (r.data) setStudents(r.data);
+      if (r.error) setError(r.error);
+    } catch {
+      setError('Failed to load students');
     } finally { setLoading(false); }
   }, [user?.departmentId, search]);
 
@@ -35,15 +40,27 @@ export default function StudentsPage() {
         placeholder="Search by name or matric..."
         value={search}
         onChange={e => setSearch(e.target.value)}
+        aria-label="Search students"
         className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
 
       {loading ? (
-        <p className="text-gray-500 text-sm">Loading...</p>
+        <div className="flex items-center justify-center h-32">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+        </div>
+      ) : error ? (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+          <p className="text-red-700 font-medium">{error}</p>
+          <button onClick={fetch} className="mt-3 text-sm text-red-600 hover:underline">
+            Try again
+          </button>
+        </div>
       ) : students.length === 0 ? (
-        <p className="text-gray-500 text-sm">No students found.</p>
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center text-gray-500 text-sm">
+          No students found. Try changing the search.
+        </div>
       ) : (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50">
               <tr>

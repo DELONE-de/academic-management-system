@@ -2,24 +2,19 @@
 
 'use client';
 
-import React, { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React from 'react';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { RouteGuard } from '@/components/layout/RouteGuard';
 
 export default function DashboardLayoutWrapper({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { isAuthenticated, isLoading } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/login');
-    }
-  }, [isAuthenticated, isLoading, router]);
+  const pathname = usePathname();
+  const { isLoading } = useAuth();
 
   if (isLoading) {
     return (
@@ -32,9 +27,9 @@ export default function DashboardLayoutWrapper({
     );
   }
 
-  if (!isAuthenticated) {
-    return null;
-  }
-
-  return <DashboardLayout>{children}</DashboardLayout>;
+  return (
+    <RouteGuard pathname={pathname || '/'}>
+      <DashboardLayout>{children}</DashboardLayout>
+    </RouteGuard>
+  );
 }
