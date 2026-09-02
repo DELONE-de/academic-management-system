@@ -12,19 +12,36 @@ import uploadRoutes from './upload.routes.js';
 import reviewRoutes from './review.routes.js';
 import auditRoutes from './audit.routes.js';
 import approvalRoutes from './approval.routes.js';
+import { prisma } from '../config/database.js';
 
 const router = Router();
 
-// Health check endpoint
-router.get('/health', (req, res) => {
-  res.json({
-    success: true,
-    message: 'API is running',
+// Health check endpoint — distinguishes API / database / AI configuration health
+router.get('/health', async (req, res) => {
+  const checks: Record<string, string> = { api: 'ok' };
+  let dbHealthy = true;
+
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    checks.database = 'ok';
+  } catch (error) {
+    dbHealthy = false;
+    checks.database = 'unavailable';
+  }
+
+  // AI configuration — present keys, but their absence is not fatal (system works without AI)
+  checks.ai = process.env.GEMINI_API_KEY ? 'configured' : 'not_configured';
+  if (!process.env.GEMINI_API_KEY && process.env.GROQ_API_KEY) checks.ai = 'configured_via_groq';
+
+  res.status(dbHealthy ? 200 : 503).json({
+    success: dbHealthy,
+    message: dbHealthy ? 'API is running' : 'Database unavailable',
     timestamp: new Date().toISOString(),
     version: '1.0.0',
+    checks,
     features: {
-      bulkStudentImport: true,
-      bulkScoreUpload: true,
+      bulkStudentImport: false,
+      bulkScoreUpload: false,
       singleScoreManagement: true,
       gpaRecalculation: true,
       aiUploadPipeline: true,

@@ -21,16 +21,21 @@ export class ResultService {
 
     if (!department) throw new AppError('Department not found', 404);
 
+    // Batch-load all courses in one query instead of N+1
+    const courseIds = [...new Set(scores.map((s) => s.courseId))];
+    const courses = await prisma.course.findMany({
+      where: { id: { in: courseIds } },
+      select: { id: true, unit: true, departmentId: true },
+    });
+    const courseMap = new Map(courses.map((c) => [c.id, c]));
+
     const results: any[] = [];
     const errors: any[] = [];
     const affectedStudentIds = new Set<string>();
 
     for (const scoreEntry of scores) {
       try {
-        const course = await prisma.course.findUnique({
-          where: { id: scoreEntry.courseId },
-          select: { unit: true, departmentId: true },
-        });
+        const course = courseMap.get(scoreEntry.courseId);
 
         if (!course) {
           errors.push({ studentId: scoreEntry.studentId, courseId: scoreEntry.courseId, error: 'Course not found' });
@@ -56,6 +61,7 @@ export class ResultService {
             gradePoint: calculation.gradePoint,
             pxu: calculation.pxu,
             isCarryOver: calculation.isCarryOver,
+            status: 'OFFICIAL',
             level,
             semester,
             academicYear,
@@ -66,6 +72,7 @@ export class ResultService {
             gradePoint: calculation.gradePoint,
             pxu: calculation.pxu,
             isCarryOver: calculation.isCarryOver,
+            status: 'OFFICIAL',
           },
           include: {
             student: { select: { matricNumber: true, firstName: true, lastName: true } },
@@ -151,6 +158,7 @@ export class ResultService {
         gradePoint: calculation.gradePoint,
         pxu: calculation.pxu,
         isCarryOver: calculation.isCarryOver,
+        status: 'OFFICIAL',
         level,
         semester,
         academicYear,
@@ -161,6 +169,7 @@ export class ResultService {
         gradePoint: calculation.gradePoint,
         pxu: calculation.pxu,
         isCarryOver: calculation.isCarryOver,
+        status: 'OFFICIAL',
       },
       include: {
         student: { select: { matricNumber: true, firstName: true, lastName: true } },
@@ -262,6 +271,7 @@ export class ResultService {
         course: { select: { id: true, code: true, title: true, unit: true } },
       },
       orderBy: [{ student: { matricNumber: 'asc' } }, { course: { code: 'asc' } }],
+      take: 500,
     });
   }
 
@@ -290,6 +300,7 @@ export class ResultService {
         gradePoint: calculation.gradePoint,
         pxu: calculation.pxu,
         isCarryOver: calculation.isCarryOver,
+        status: 'OFFICIAL',
       },
       include: {
         student: { select: { matricNumber: true, firstName: true, lastName: true } },
@@ -315,7 +326,7 @@ export class ResultService {
    */
   async getCarryOverCourses(studentId: string): Promise<any[]> {
     return prisma.result.findMany({
-      where: { studentId, isCarryOver: true },
+      where: { studentId, isCarryOver: true, status: 'OFFICIAL' },
       include: { course: { select: { code: true, title: true, unit: true, level: true, semester: true } } },
       orderBy: [{ level: 'asc' }, { semester: 'asc' }],
     });

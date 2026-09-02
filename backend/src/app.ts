@@ -17,6 +17,7 @@ validateEnv();
 import routes from './routes/index.js';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware.js';
 import { connectDatabase, disconnectDatabase } from './config/database.js';
+import { requestCorrelation, logger } from './utils/logger.js';
 import process from 'process';
 
 // Create Express application
@@ -43,6 +44,9 @@ app.use(globalLimiter);
 // Security headers
 app.use(helmet());
 
+// Request correlation ID + structured logging
+app.use(requestCorrelation);
+
 // CORS configuration
 const allowedOrigins = process.env.FRONTEND_URL
   ? process.env.FRONTEND_URL.split(',')
@@ -65,11 +69,10 @@ app.use(
   })
 );
 
-// Request logging
-if (process.env.NODE_ENV !== 'production') {
+// Request logging — use structured logger instead of morgan
+// (morgan kept only in development for the concise console format)
+if (process.env.NODE_ENV !== 'production' && process.env.MORGAN) {
   app.use(morgan('dev'));
-} else {
-  app.use(morgan('combined'));
 }
 
 // Body parsing

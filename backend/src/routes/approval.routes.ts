@@ -4,6 +4,7 @@ import { Router, Response } from 'express';
 import { authenticate, authorize } from '../middleware/auth.middleware.js';
 import { assertDepartmentAccess } from '../middleware/access.middleware.js';
 import { prisma } from '../config/database.js';
+import { gpaService } from '../services/gpa.service.js';
 import { AuthRequest } from '../types/index.js';
 import { UserRole, ApprovalStatus, Level, Semester } from '@prisma/client';
 
@@ -245,20 +246,60 @@ router.post(
       return;
     }
 
-    const [updated] = await prisma.$transaction([
-      prisma.resultBatch.update({ where: { id: batch.id }, data: { status: ApprovalStatus.PUBLISHED } }),
-      prisma.auditLog.create({
+    // Publish: promote PROPOSED results for this batch to OFFICIAL and recalculate GPA
+    const students = await prisma.student.findMany({
+      where: { departmentId: batch.departmentId },
+      select: { id: true },
+    });
+    const studentIds = students.map((s) => s.id);
+
+    const result = await prisma.$transaction(async (tx) => {
+      const promote = await tx.result.updateMany({
+        where: {
+          studentId: { in: studentIds },
+          level: batch.level,
+          semester: batch.semester,
+          academicYear: batch.academicYear,
+          status: 'PROPOSED',
+        },
+        data: { status: 'OFFICIAL' },
+      });
+
+      const updated = await tx.resultBatch.update({
+        where: { id: batch.id },
+        data: { status: ApprovalStatus.PUBLISHED },
+      });
+
+      await tx.auditLog.create({
         data: {
           action: 'RESULT_PUBLISHED',
           entityType: 'result_batch',
           entityId: batch.id,
           actorId: req.user!.id,
-          meta: {},
+          meta: { promotedResults: promote.count, academicYear: batch.academicYear },
         },
-      }),
-    ]);
+      });
 
-    res.json({ success: true, data: updated });
+      return { updated, promotedCount: promote.count };
+    });
+
+    // Recalculate GPA for affected students AFTER results are official
+    const affectedResults = await prisma.result.findMany({
+      where: {
+        studentId: { in: studentIds },
+        level: batch.level,
+        semester: batch.semester,
+        academicYear: batch.academicYear,
+        status: 'OFFICIAL',
+      },
+      distinct: ['studentId'],
+      select: { studentId: true },
+    });
+    for (const r of affectedResults) {
+      await gpaService.calculateSemesterGPA(r.studentId, batch.level, batch.semester, batch.academicYear);
+    }
+
+    res.json({ success: true, data: result.updated, meta: { promotedResults: result.promotedCount } });
   }
 );
 

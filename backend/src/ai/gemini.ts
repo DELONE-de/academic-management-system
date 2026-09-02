@@ -22,10 +22,24 @@ import {
   groqValidateWithTools,
   groqExplainGPA,
 } from './groq.js';
+import { recordAIOperation, AIAuditEntry } from './audit.js';
+import { PROMPT_VERSION } from './prompts.js';
 
 function isQuotaError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
   return msg.includes('429') || msg.includes('quota') || msg.includes('Too Many Requests');
+}
+
+function record(op: AIAuditEntry['operation'], provider: AIAuditEntry['provider'], result: AIAuditEntry['result'], durationMs: number, extra?: Partial<AIAuditEntry>) {
+  recordAIOperation({
+    operation: op,
+    provider,
+    model: provider === 'gemini' ? MODEL : 'llama-3.3-70b-versatile',
+    promptVersion: PROMPT_VERSION,
+    result,
+    durationMs,
+    ...extra,
+  });
 }
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
@@ -93,6 +107,7 @@ export interface ExtractedResult {
 export async function geminiExtractStudents(
   content: string
 ): Promise<ExtractedStudent[]> {
+  const start = Date.now();
   try {
     const model = genAI.getGenerativeModel({ model: MODEL, safetySettings: SAFETY });
     const result = await model.generateContent([
@@ -100,12 +115,18 @@ export async function geminiExtractStudents(
     ]);
     const text = result.response.text().trim();
     const json = text.replace(/^```json\n?/, '').replace(/\n?```$/, '');
-    return JSON.parse(json);
+    const parsed = JSON.parse(json);
+    record('extraction', 'gemini', 'PRIMARY_SUCCESS', Date.now() - start, { outputRecordCount: Array.isArray(parsed) ? parsed.length : 1 });
+    return parsed;
   } catch (err) {
     if (isQuotaError(err)) {
       console.warn('⚠️  Gemini quota exceeded — falling back to Groq');
-      return groqExtractStudents(content);
+      const startFallback = Date.now();
+      const fallbackResult = await groqExtractStudents(content);
+      record('extraction', 'groq', 'PRIMARY_FAILED_FALLBACK_SUCCESS', Date.now() - startFallback, { outputRecordCount: fallbackResult.length });
+      return fallbackResult;
     }
+    record('extraction', 'gemini', 'PRIMARY_FAILED_FALLBACK_FAILED', Date.now() - start, { error: err instanceof Error ? err.message : String(err) });
     return [];
   }
 }
@@ -114,6 +135,7 @@ export async function geminiExtractResults(
   content: string,
   academicYear: string
 ): Promise<ExtractedResult[]> {
+  const start = Date.now();
   try {
     const model = genAI.getGenerativeModel({ model: MODEL, safetySettings: SAFETY });
     const result = await model.generateContent([
@@ -121,12 +143,18 @@ export async function geminiExtractResults(
     ]);
     const text = result.response.text().trim();
     const json = text.replace(/^```json\n?/, '').replace(/\n?```$/, '');
-    return JSON.parse(json);
+    const parsed = JSON.parse(json);
+    record('extraction', 'gemini', 'PRIMARY_SUCCESS', Date.now() - start, { outputRecordCount: Array.isArray(parsed) ? parsed.length : 1 });
+    return parsed;
   } catch (err) {
     if (isQuotaError(err)) {
       console.warn('⚠️  Gemini quota exceeded — falling back to Groq');
-      return groqExtractResults(content, academicYear);
+      const startFallback = Date.now();
+      const fallbackResult = await groqExtractResults(content, academicYear);
+      record('extraction', 'groq', 'PRIMARY_FAILED_FALLBACK_SUCCESS', Date.now() - startFallback, { outputRecordCount: fallbackResult.length });
+      return fallbackResult;
     }
+    record('extraction', 'gemini', 'PRIMARY_FAILED_FALLBACK_FAILED', Date.now() - start, { error: err instanceof Error ? err.message : String(err) });
     return [];
   }
 }
@@ -142,13 +170,20 @@ export async function geminiValidateWithTools(
   departmentCode: string,
   onProgress?: (message: string) => void
 ): Promise<ReviewItemPayload[]> {
+  const start = Date.now();
   try {
-    return await _geminiValidateWithTools(records, type, departmentCode, onProgress);
+    const result = await _geminiValidateWithTools(records, type, departmentCode, onProgress);
+    record('validation', 'gemini', 'PRIMARY_SUCCESS', Date.now() - start, { inputRecordCount: records.length, outputRecordCount: result.length });
+    return result;
   } catch (err) {
     if (isQuotaError(err)) {
       console.warn('⚠️  Gemini quota exceeded — falling back to Groq');
-      return groqValidateWithTools(records, type, departmentCode, onProgress);
+      const startFallback = Date.now();
+      const fallbackResult = await groqValidateWithTools(records, type, departmentCode, onProgress);
+      record('validation', 'groq', 'PRIMARY_FAILED_FALLBACK_SUCCESS', Date.now() - startFallback, { inputRecordCount: records.length, outputRecordCount: fallbackResult.length });
+      return fallbackResult;
     }
+    record('validation', 'gemini', 'PRIMARY_FAILED_FALLBACK_FAILED', Date.now() - start, { error: err instanceof Error ? err.message : String(err), inputRecordCount: records.length });
     throw err;
   }
 }

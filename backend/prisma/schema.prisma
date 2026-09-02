@@ -216,6 +216,7 @@ model Result {
   gradePoint  Int
   pxu         Float
   isCarryOver Boolean  @default(false)
+  status      String   @default("PROPOSED") // PROPOSED | OFFICIAL — proposed results from AI are not yet official
 
   // Academic period
   level        Level

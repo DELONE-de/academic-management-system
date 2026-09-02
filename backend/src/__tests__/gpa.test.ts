@@ -74,6 +74,7 @@ describe('GPAService', () => {
         grade: Grade.A,
         gradePoint: 5,
         pxu: 15,
+        status: 'OFFICIAL',
         level: Level.LEVEL_100,
         semester: Semester.FIRST,
         academicYear: '2024/2025',
@@ -104,13 +105,13 @@ describe('GPAService', () => {
     });
 
     await prisma.result.create({
-      data: { studentId: student.id, courseId: courseA.id, score: 80, grade: Grade.A, gradePoint: 5, pxu: 15, level: Level.LEVEL_100, semester: Semester.FIRST, academicYear: '2024/2025' },
+      data: { studentId: student.id, courseId: courseA.id, score: 80, grade: Grade.A, gradePoint: 5, pxu: 15, status: 'OFFICIAL', level: Level.LEVEL_100, semester: Semester.FIRST, academicYear: '2024/2025' },
     });
     await prisma.result.create({
-      data: { studentId: student.id, courseId: courseB.id, score: 65, grade: Grade.B, gradePoint: 4, pxu: 8, level: Level.LEVEL_100, semester: Semester.FIRST, academicYear: '2024/2025' },
+      data: { studentId: student.id, courseId: courseB.id, score: 65, grade: Grade.B, gradePoint: 4, pxu: 8, status: 'OFFICIAL', level: Level.LEVEL_100, semester: Semester.FIRST, academicYear: '2024/2025' },
     });
     await prisma.result.create({
-      data: { studentId: student.id, courseId: courseC.id, score: 30, grade: Grade.F, gradePoint: 0, pxu: 0, level: Level.LEVEL_100, semester: Semester.FIRST, academicYear: '2024/2025' },
+      data: { studentId: student.id, courseId: courseC.id, score: 30, grade: Grade.F, gradePoint: 0, pxu: 0, status: 'OFFICIAL', level: Level.LEVEL_100, semester: Semester.FIRST, academicYear: '2024/2025' },
     });
 
     const result = await gpaService.calculateSemesterGPA(

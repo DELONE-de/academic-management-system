@@ -22,9 +22,9 @@ export class GPAService {
   ): Promise<{ semesterGPA: any; cgpa: number }> {
     const db = tx || prisma;
 
-    // Get all results for the semester
+    // Get all results for the semester — only OFFICIAL results count toward GPA
     const results = await db.result.findMany({
-      where: { studentId, level, semester, academicYear },
+      where: { studentId, level, semester, academicYear, status: 'OFFICIAL' },
       include: {
         course: { select: { unit: true } },
         student: { select: { department: { select: { passMark: true } } } },
@@ -135,9 +135,9 @@ export class GPAService {
     });
 
     if (!semesterGPA) {
-      // Calculate on-the-fly if not stored
+      // Calculate on-the-fly if not stored — only OFFICIAL results count
       const results = await prisma.result.findMany({
-        where: { studentId, level, semester, academicYear },
+        where: { studentId, level, semester, academicYear, status: 'OFFICIAL' },
         include: {
           course: { select: { unit: true } },
           student: { select: { department: { select: { passMark: true } } } },
@@ -217,14 +217,23 @@ export class GPAService {
     const results: any[] = [];
     const errors: any[] = [];
 
-    for (const student of students) {
-      try {
-        const gpa = await this.calculateSemesterGPA(student.id, level, semester, academicYear);
-        results.push({ studentId: student.id, ...gpa });
-      } catch (error: any) {
-        errors.push({ studentId: student.id, error: error.message });
+    // Process with bounded concurrency to avoid N+1 sequential round-trips
+    const CONCURRENCY = 5;
+    const self = this;
+    let index = 0;
+    async function worker(): Promise<void> {
+      while (index < students.length) {
+        const current = index++;
+        const student = students[current];
+        try {
+          const gpa = await self.calculateSemesterGPA(student.id, level, semester, academicYear);
+          results.push({ studentId: student.id, ...gpa });
+        } catch (error: any) {
+          errors.push({ studentId: student.id, error: error.message });
+        }
       }
     }
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, students.length) }, () => worker()));
 
     return { calculated: results.length, errors: errors.length, results, errorDetails: errors };
   }

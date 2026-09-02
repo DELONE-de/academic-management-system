@@ -44,8 +44,11 @@ export class CourseService {
     level?: Level;
     semester?: Semester;
     search?: string;
+    page?: number;
+    limit?: number;
   }): Promise<any[]> {
-    const { departmentId, level, semester, search } = params;
+    const { departmentId, level, semester, search, page = 1, limit: rawLimit = 100 } = params;
+    const limit = Math.min(rawLimit, 200);
 
     const where: any = {};
 
@@ -70,6 +73,8 @@ export class CourseService {
 
     const courses = await prisma.course.findMany({
       where,
+      skip: (page - 1) * limit,
+      take: limit,
       include: {
         department: {
           select: { id: true, name: true, code: true },

@@ -15,6 +15,9 @@ import {
   ExtractionType,
 } from '../ai/gemini.js';
 import { validateExtractedStudents, validateExtractedResults } from '../ai/schema.js';
+import { normalizeStudentRecords, normalizeResultRecords, collectNormalizationIssues, NormalizedStudent, NormalizedResult } from '../ai/normalize.js';
+import { detectSuspiciousScorePattern, Anomaly } from '../ai/anomaly.js';
+import { clearAIAuditLog, getAIAuditEntries, buildAISummary } from '../ai/audit.js';
 import { ReviewItemPayload } from '../types/index.js';
 
 // ============================================================
@@ -50,6 +53,9 @@ export async function processUpload(
     where: { uploadedById, status: 'PROCESSING', createdAt: { lt: tenMinutesAgo } },
     data: { status: 'REJECTED', aiSummary: 'Processing timed out. Please re-upload the file.' },
   });
+
+  // Reset AI audit trail for this upload
+  clearAIAuditLog();
 
   // 1. Create UploadJob record
   const job = await prisma.uploadJob.create({
@@ -158,6 +164,43 @@ export async function processUpload(
       return;
     }
 
+    // 3b. Normalization stage — deterministic normalization of extracted records
+    sseWrite(res, 'status', { jobId: job.id, message: `Normalizing ${records.length} records...` });
+
+    const normalizationIssues: any[] = [];
+    let normalizedRecords: any[] = records;
+
+    if (uploadType === 'students') {
+      const normalized = normalizeStudentRecords(records);
+      normalizationIssues.push(...collectNormalizationIssues(normalized));
+      normalizedRecords = normalized;
+    } else {
+      const normalized = normalizeResultRecords(records);
+      normalizationIssues.push(...collectNormalizationIssues(normalized));
+      normalizedRecords = normalized;
+    }
+
+    if (normalizationIssues.length > 0) {
+      const issueSummary = normalizationIssues.map((i) => `Row ${i.rowNumber}: ${i.field} — ${i.reason}`).join('; ');
+      sseWrite(res, 'status', { jobId: job.id, message: `Normalization found ${normalizationIssues.length} issue(s): ${issueSummary.slice(0, 200)}` });
+    }
+
+    // 3c. Anomaly detection — deterministic rule-based checks
+    const anomalies: Anomaly[] = [];
+    if (uploadType === 'results') {
+      for (const record of normalizedRecords as NormalizedResult[]) {
+        const scoreAnomalies = detectSuspiciousScorePattern(record.courses);
+        anomalies.push(...scoreAnomalies.map((a) => ({ ...a, rowNumber: record.rowNumber })));
+      }
+    }
+
+    if (anomalies.length > 0) {
+      sseWrite(res, 'status', { jobId: job.id, message: `Anomaly detection found ${anomalies.length} potential issue(s)` });
+    }
+
+    // Use normalized records for the rest of the pipeline
+    records = normalizedRecords;
+
     // 4. Gemini validation pass with function-calling tools
     sseWrite(res, 'status', { jobId: job.id, message: `Validating ${records.length} records with AI...` });
 
@@ -181,10 +224,23 @@ export async function processUpload(
       message: `AI found ${reviewItems.length} issues — ${autoFixed.length} auto-fixed, ${needsReview.length} need review`,
     });
 
+    // 5b. Convert deterministic anomalies into review items (mandatory review for high severity)
+    const anomalyReviewItems: ReviewItemPayload[] = anomalies.map((a) => ({
+      rowNumber: a.rowNumber,
+      field: 'score',
+      originalValue: String((records as any).find((r: any) => r.rowNumber === a.rowNumber)?.courses?.[0]?.score ?? ''),
+      confidence: a.confidence,
+      issueType: a.type === 'duplicate_result' ? 'duplicate'
+        : a.type === 'score_range' || a.type === 'suspicious_score_pattern' ? 'invalid_score'
+        : 'invalid_score',
+      issueDetail: a.detail,
+    }));
+
     // 6. Persist ReviewItems for issues that need human review
-    if (needsReview.length > 0) {
+    const allReviewItems = [...needsReview, ...anomalyReviewItems];
+    if (allReviewItems.length > 0) {
       await prisma.reviewItem.createMany({
-        data: needsReview.map((item) => {
+        data: allReviewItems.map((item) => {
           // find the original record for this row so commit can reconstruct it
           const rawRecord = records.find((r: any) => r.rowNumber === item.rowNumber) ?? null;
           return {
@@ -203,20 +259,24 @@ export async function processUpload(
     }
 
     // 7. Update UploadJob with final counts
-    const finalStatus = needsReview.length > 0 ? 'NEEDS_REVIEW' : 'APPROVED';
+    const needsReviewTotal = allReviewItems.length;
+    const finalStatus = needsReviewTotal > 0 ? 'NEEDS_REVIEW' : 'APPROVED';
     const aiSummary =
-      reviewItems.length === 0
+      reviewItems.length === 0 && anomalies.length === 0
         ? `All ${totalResultEntries} result entries passed validation with no issues.`
-        : `Processed ${records.length} students (${totalResultEntries} course entries). Found ${reviewItems.length} issue(s): ${autoFixed.length} auto-fixed, ${needsReview.length} require your review.`;
+        : `Processed ${records.length} students (${totalResultEntries} course entries). Found ${reviewItems.length + anomalies.length} issue(s): ${autoFixed.length} auto-fixed, ${needsReviewTotal} require your review.`;
+
+    // Capture AI audit trail for this upload
+    const aiAudit = buildAISummary(getAIAuditEntries());
 
     await prisma.uploadJob.update({
       where: { id: job.id },
       data: {
         status: finalStatus,
         totalRows: totalResultEntries,
-        issuesFound: reviewItems.length,
+        issuesFound: reviewItems.length + anomalies.length,
         issuesFixed: autoFixed.length,
-        issuesPending: needsReview.length,
+        issuesPending: needsReviewTotal,
         aiSummary,
         rawRecords: records as any,
         academicYear,
@@ -233,9 +293,12 @@ export async function processUpload(
         meta: {
           totalStudents: records.length,
           totalResultEntries,
-          issuesFound: reviewItems.length,
+          issuesFound: reviewItems.length + anomalies.length,
           autoFixed: autoFixed.length,
-          needsReview: needsReview.length,
+          needsReview: needsReviewTotal,
+          normalizationIssues: normalizationIssues.length,
+          anomalies: anomalies.length,
+          ai: aiAudit,
         },
       },
     });

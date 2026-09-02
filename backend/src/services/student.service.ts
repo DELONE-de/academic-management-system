@@ -41,7 +41,8 @@ export class StudentService {
     limit?: number;
     search?: string;
   }): Promise<{ students: any[]; total: number }> {
-    const { departmentId, level, page = 1, limit = 50, search } = params;
+    const { departmentId, level, page = 1, limit: rawLimit = 50, search } = params;
+    const limit = Math.min(rawLimit, 200);
 
     const where: any = {};
 

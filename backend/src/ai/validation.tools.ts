@@ -354,7 +354,8 @@ export async function saveResult(args: {
   let skipped = 0;
   const gpaGroups = new Map<string, { level: any; semester: any }>();
 
-  // Use transaction for atomicity: result upserts + GPA recalculation
+  // Proposed (AI-extracted) results are persisted but do NOT trigger GPA recalculation.
+  // GPA is only recalculated once the batch is approved/published (results become OFFICIAL).
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     for (const c of args.courses) {
       const course = courseMap.get(c.courseCode.toUpperCase());
@@ -372,11 +373,12 @@ export async function saveResult(args: {
           gradePoint: calc.gradePoint,
           pxu: calc.pxu,
           isCarryOver: calc.isCarryOver,
+          status: 'PROPOSED',
           level: course.level,
           semester: course.semester,
           academicYear: args.academicYear,
         },
-        update: { score: c.score, grade: calc.grade, gradePoint: calc.gradePoint, pxu: calc.pxu, isCarryOver: calc.isCarryOver },
+        update: { score: c.score, grade: calc.grade, gradePoint: calc.gradePoint, pxu: calc.pxu, isCarryOver: calc.isCarryOver, status: 'PROPOSED' },
       });
 
       saved++;
@@ -384,10 +386,8 @@ export async function saveResult(args: {
       if (!gpaGroups.has(key)) gpaGroups.set(key, { level: course.level, semester: course.semester });
     }
 
-    // Recalculate GPA for each affected level/semester group within the same transaction
-    for (const group of gpaGroups.values()) {
-      await gpaService.calculateSemesterGPA(student.id, group.level, group.semester, args.academicYear, tx);
-    }
+    // NOTE: GPA recalculation intentionally NOT performed here — these are PROPOSED
+    // results. GPA is recalculated on publish when results become OFFICIAL.
   });
 
   return { saved, skipped, gpaRecalculated: gpaGroups.size > 0 };

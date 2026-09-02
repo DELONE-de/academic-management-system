@@ -34,12 +34,13 @@ export class ReportService {
       throw new AppError('Department not found', 404);
     }
 
-    // Get all results for the semester
+    // Get all results for the semester — only OFFICIAL (approved/published) results
     const results = await prisma.result.findMany({
       where: {
         level,
         semester,
         academicYear,
+        status: 'OFFICIAL',
         student: {
           departmentId,
         },
@@ -241,6 +242,7 @@ export class ReportService {
       const carryOvers = await prisma.result.count({
         where: {
           isCarryOver: true,
+          status: 'OFFICIAL',
           student: {
             departmentId: dept.id,
           },
@@ -300,6 +302,7 @@ export class ReportService {
               },
             },
           },
+          where: { status: 'OFFICIAL' },
           orderBy: [{ level: 'asc' }, { semester: 'asc' }],
         },
         semesterGpas: {
