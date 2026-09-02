@@ -32,4 +32,14 @@ export function validateEnv(): void {
       console.warn(`Warning: Missing production environment variables:\n  ${prodMissing.join('\n  ')}`);
     }
   }
+
+  // AI_PROVIDER validation
+  const aiProvider = process.env.AI_PROVIDER || 'openrouter';
+  if (!['openrouter', 'gemini', 'groq'].includes(aiProvider)) {
+    console.error(`Invalid AI_PROVIDER "${aiProvider}". Must be one of: openrouter, gemini, groq`);
+    process.exit(1);
+  }
+  if (aiProvider === 'openrouter' && !process.env.OPENROUTER_API_KEY) {
+    console.warn('Warning: AI_PROVIDER is set to "openrouter" but OPENROUTER_API_KEY is not set. AI features will not work.');
+  }
 }

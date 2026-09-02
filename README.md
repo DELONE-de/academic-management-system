@@ -9,7 +9,8 @@ An AI-first academic management platform for Nigerian universities. Ingests, val
 ```
 Frontend (Next.js 14) → Backend (Express.js + TypeScript) → Database (PostgreSQL via Prisma)
                                                                     ↓
-                                                            AI Layer (Gemini + Groq)
+                                                           AI Routing Layer
+                                                     (OpenRouter → Gemini → Groq)
 ```
 
 ### Key Components
@@ -28,7 +29,7 @@ Frontend (Next.js 14) → Backend (Express.js + TypeScript) → Database (Postgr
 | Backend | Node.js + Express.js 4 + TypeScript 5 (ESM) |
 | Frontend | Next.js 14 + React 18 + Tailwind CSS 3 |
 | Database | PostgreSQL (via Prisma ORM) |
-| AI | Google Gemini 2.0 Flash (primary) + Groq llama-3.3-70b (fallback) |
+| AI | OpenRouter / Gemma 4 31B (primary) + Gemini 2.0 Flash (fallback) + Groq llama-3.3-70b (fallback) |
 | Auth | JWT + bcryptjs |
 | File Upload | Multer |
 | Excel | SheetJS (xlsx) |
@@ -56,10 +57,28 @@ Required variables in `.env`:
 | `DATABASE_URL` | Yes | Pooled PostgreSQL connection URL |
 | `DIRECT_URL` | Yes | Direct PostgreSQL connection URL (for migrations) |
 | `JWT_SECRET` | Yes | Random secret for JWT signing |
-| `GEMINI_API_KEY` | No* | Google Gemini API key (needed for AI features) |
-| `GROQ_API_KEY` | No* | Groq API key (fallback AI provider) |
+| `AI_PROVIDER` | No | Primary AI provider: `openrouter` (default), `gemini`, or `groq` |
+| `OPENROUTER_API_KEY` | No* | OpenRouter API key (primary AI — Gemma 4 31B) |
+| `GEMINI_API_KEY` | No* | Google Gemini API key (fallback AI provider) |
+| `GROQ_API_KEY` | No* | Groq API key (secondary fallback AI provider) |
 
 *A key is required for AI upload pipeline features. The system will start without it, but AI operations will fail.
+
+### AI Provider Architecture
+
+The AI layer routes through a single provider-agnostic service (`backend/src/ai/ai.service.ts`). Default routing:
+
+```
+AI request → OpenRouter (Gemma 4 31B) → Gemini → Groq
+```
+
+- **OpenRouter** (primary, default): runs `google/gemma-4-31b-it:free` (free tier, rate-limited). Configured via `OPENROUTER_API_KEY`, optional `OPENROUTER_MODEL` / `OPENROUTER_BASE_URL`.
+- **Gemini** (first fallback): `gemini-2.0-flash`.
+- **Groq** (second fallback): `llama-3.3-70b-versatile`.
+
+Fallback activates only on genuine failure (network error, timeout, 429, 5xx, malformed/unvalidatable output) — never for ordinary valid responses. Each operation records which provider actually answered (provider, model, fallback-used) in the AI audit trail. Set `AI_PROVIDER=gemini` or `AI_PROVIDER=groq` to force a different primary.
+
+**Safety rule:** AI output is never treated as academic truth. Every extraction passes through Zod schema validation → deterministic normalization → deterministic academic validation (grades, GPA, CGPA) → confidence scoring → anomaly detection → human review → approval. The deterministic academic engine remains authoritative.
 
 ### 2. Install Dependencies
 
@@ -141,7 +160,7 @@ cd backend && npm test
 - **Data isolation** — HODs scoped to their department, DEANs to their faculty
 - **Ownership checks** — upload jobs and review items scoped to uploader/dept
 - **TLS/HTTPS** — recommended for production deployment
-- **AI safety** — Gemini safety settings at BLOCK_MEDIUM_AND_ABOVE
+- **AI safety** — Gemini safety settings at BLOCK_MEDIUM_AND_ABOVE; AI content treated as untrusted input (never system instructions); AI cannot directly insert official academic records (always passes deterministic validation + human review + approval)
 
 ## Academic Rules
 
@@ -182,7 +201,7 @@ CGPA = Σ(totalPoints across all semesters) / Σ(totalUnits across all semesters
 2. ✅ Set `NODE_ENV=production`
 3. ✅ Configure `FRONTEND_URL` to your production domain
 4. ✅ Set `DATABASE_URL` and `DIRECT_URL` for your production database
-5. ✅ Set `GEMINI_API_KEY` and/or `GROQ_API_KEY`
+5. ✅ Set `OPENROUTER_API_KEY` (primary AI) and/or `GEMINI_API_KEY` + `GROQ_API_KEY` (fallbacks)
 6. Run `npm run build` in both backend and frontend
 7. Run database migrations: `npx prisma migrate deploy`
 8. Start backend: `npm run start`

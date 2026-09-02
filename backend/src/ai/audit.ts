@@ -5,7 +5,7 @@ export type AIProviderResult = 'PRIMARY_SUCCESS' | 'PRIMARY_FAILED_FALLBACK_SUCC
 
 export interface AIAuditEntry {
   operation: 'extraction' | 'validation' | 'explanation';
-  provider: 'gemini' | 'groq';
+  provider: 'openrouter' | 'gemini' | 'groq';
   model: string;
   promptVersion: string;
   result: AIProviderResult;

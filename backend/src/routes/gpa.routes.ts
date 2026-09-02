@@ -5,7 +5,7 @@ import { gpaController } from '../controllers/gpa.controller.js';
 import { authenticate, authorize } from '../middleware/auth.middleware.js';
 import { validateBody } from '../middleware/validation.middleware.js';
 import { prisma } from '../config/database.js';
-import { geminiExplainGPA } from '../ai/gemini.js';
+import { aiExplainGPA } from '../ai/ai.service.js';
 import { assertStudentAccess } from '../middleware/access.middleware.js';
 import { AuthRequest } from '../types/index.js';
 import { z } from 'zod';
@@ -131,7 +131,7 @@ router.get('/student/:studentId/explain', async (req: AuthRequest, res: Response
   const totalPoints = results.reduce((s, r) => s + r.pxu, 0);
   const gpa = semGpa?.gpa ?? (totalUnits > 0 ? Math.round((totalPoints / totalUnits) * 100) / 100 : 0);
 
-  const explanation = await geminiExplainGPA({
+  const explanation = (await aiExplainGPA({
     studentName: `${student.firstName} ${student.lastName}`,
     gpa,
     results: results.map((r) => ({
@@ -144,7 +144,7 @@ router.get('/student/:studentId/explain', async (req: AuthRequest, res: Response
     })),
     totalUnits,
     totalPoints,
-  });
+  })).data;
 
   res.json({ success: true, data: { gpa, explanation } });
 });

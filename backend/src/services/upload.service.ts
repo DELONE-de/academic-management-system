@@ -8,16 +8,19 @@ import {
   parseScoreRows,
 } from '../utils/excel.js';
 import {
-  geminiExtractStudents,
-  geminiExtractResults,
-  geminiValidateWithTools,
   geminiVisionExtract,
   ExtractionType,
 } from '../ai/gemini.js';
+import {
+  aiExtractStudents,
+  aiExtractResults,
+  aiValidateWithTools,
+  getAIAuditEntries,
+} from '../ai/ai.service.js';
 import { validateExtractedStudents, validateExtractedResults } from '../ai/schema.js';
 import { normalizeStudentRecords, normalizeResultRecords, collectNormalizationIssues, NormalizedStudent, NormalizedResult } from '../ai/normalize.js';
 import { detectSuspiciousScorePattern, Anomaly } from '../ai/anomaly.js';
-import { clearAIAuditLog, getAIAuditEntries, buildAISummary } from '../ai/audit.js';
+import { clearAIAuditLog, buildAISummary } from '../ai/audit.js';
 import { ReviewItemPayload } from '../types/index.js';
 
 // ============================================================
@@ -106,8 +109,13 @@ export async function processUpload(
 
       records =
         uploadType === 'students'
-          ? await geminiExtractStudents(textContent)
-          : await geminiExtractResults(textContent, academicYear);
+          ? (await aiExtractStudents(textContent)).data
+          : (await aiExtractResults(textContent, academicYear)).data;
+
+      sseWrite(res, 'status', {
+        jobId: job.id,
+        message: `AI extracted ${records.length} records`,
+      });
 
       // Validate AI output against strict schemas — reject malformed records
       if (uploadType === 'students') {
@@ -142,11 +150,7 @@ export async function processUpload(
         }
       }
 
-      sseWrite(res, 'status', {
-        jobId: job.id,
-        message: `Gemini extracted ${records.length} records`,
-      });
-    }
+      }
 
     // Count total result entries (each student × their courses)
     const totalResultEntries =
@@ -201,15 +205,17 @@ export async function processUpload(
     // Use normalized records for the rest of the pipeline
     records = normalizedRecords;
 
-    // 4. Gemini validation pass with function-calling tools
+    // 4. AI validation pass (routed: OpenRouter → Gemini → Groq)
     sseWrite(res, 'status', { jobId: job.id, message: `Validating ${records.length} records with AI...` });
 
-    const reviewItems: ReviewItemPayload[] = await geminiValidateWithTools(
-      records,
-      uploadType,
-      departmentCode,
-      (msg) => sseWrite(res, 'status', { jobId: job.id, message: msg })
-    );
+    const reviewItems: ReviewItemPayload[] = (
+      await aiValidateWithTools(
+        records,
+        uploadType,
+        departmentCode,
+        (msg) => sseWrite(res, 'status', { jobId: job.id, message: msg })
+      )
+    ).data;
 
     // 5. Auto-fix high-confidence issues (confidence >= 0.9 with a suggestion)
     const autoFixed = reviewItems.filter(
