@@ -2,7 +2,7 @@
 
 import { PDFParse } from 'pdf-parse';
 import { parseExcelBuffer, parseStudentRows, parseScoreRows } from './excel.js';
-import { geminiVisionExtract } from '../ai/gemini.js';
+import { aiVisionExtract } from '../ai/ai.service.js';
 
 // pdf-parse v2 exposes a class-like `PDFParse`. Normalize to a callable.
 type PdfParseResult = { text?: string; numpages?: number; info?: any };
@@ -43,13 +43,13 @@ export async function extractFileContent(
           return { type: 'text', text, format: 'pdf' };
         }
 
-        // Image-based PDF — use Gemini vision once
+        // Image-based PDF — route through AI provider layer (OpenRouter primary)
         const base64 = buffer.toString('base64');
-        const extracted = await geminiVisionExtract(base64, 'application/pdf');
+        const extracted = (await aiVisionExtract(base64, 'application/pdf')).data;
         return { type: 'text', text: extracted, format: 'pdf' };
       } catch {
         const base64 = buffer.toString('base64');
-        const text = await geminiVisionExtract(base64, 'application/pdf');
+        const text = (await aiVisionExtract(base64, 'application/pdf')).data;
         return { type: 'text', text, format: 'pdf' };
       }
     }

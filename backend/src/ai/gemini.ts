@@ -127,7 +127,8 @@ export async function geminiExtractStudents(
       return fallbackResult;
     }
     record('extraction', 'gemini', 'PRIMARY_FAILED_FALLBACK_FAILED', Date.now() - start, { error: err instanceof Error ? err.message : String(err) });
-    return [];
+    // Genuine provider failure — propagate so the routing layer can fall back to Groq.
+    throw err instanceof Error ? err : new Error(String(err));
   }
 }
 
@@ -155,7 +156,8 @@ export async function geminiExtractResults(
       return fallbackResult;
     }
     record('extraction', 'gemini', 'PRIMARY_FAILED_FALLBACK_FAILED', Date.now() - start, { error: err instanceof Error ? err.message : String(err) });
-    return [];
+    // Genuine provider failure — propagate so the routing layer can fall back to Groq.
+    throw err instanceof Error ? err : new Error(String(err));
   }
 }
 
@@ -333,6 +335,7 @@ export async function geminiExplainGPA(data: {
   totalUnits: number;
   totalPoints: number;
 }): Promise<string> {
+  const start = Date.now();
   try {
     const model = genAI.getGenerativeModel({ model: MODEL, safetySettings: SAFETY });
     const result = await model.generateContent([
@@ -344,6 +347,7 @@ export async function geminiExplainGPA(data: {
       console.warn('⚠️  Gemini quota exceeded — falling back to Groq');
       return groqExplainGPA(data);
     }
-    return '';
+    record('explanation', 'gemini', 'PRIMARY_FAILED_FALLBACK_FAILED', Date.now() - start, { error: err instanceof Error ? err.message : String(err) });
+    throw err instanceof Error ? err : new Error(String(err));
   }
 }

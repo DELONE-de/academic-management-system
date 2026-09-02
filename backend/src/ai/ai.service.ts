@@ -76,42 +76,54 @@ async function withFallback<T>(
     if (p !== primary && hasKey(p)) order.push(p);
   }
 
+  const start = Date.now();
+  let answeringProvider: ProviderName = primary;
   let fallbackUsed = false;
-  let lastProvider: ProviderName = configuredProvider();
 
   for (let i = 0; i < order.length; i++) {
     const provider = order[i];
-    lastProvider = provider;
     const result = await attempt(provider, attempts[provider]);
     if (result.ok) {
+      answeringProvider = provider;
+      fallbackUsed = i > 0;
+      // Record authoritative routing decision with fallback status
+      recordAIOperation({
+        operation: task as any,
+        provider: provider as any,
+        model: modelFor(provider),
+        promptVersion: PROMPT_VERSION,
+        result: 'PRIMARY_SUCCESS',
+        durationMs: Date.now() - start,
+        fallbackUsed,
+      });
       return {
         data: result.data,
         meta: {
           provider,
           model: modelFor(provider),
-          fallbackUsed: i > 0,
+          fallbackUsed,
           promptVersion: PROMPT_VERSION,
         },
       };
     }
-    fallbackUsed = true;
   }
 
-  // All providers failed — record the terminal failure and return empty value.
+  // All providers failed — record terminal failure (no fallback succeeded)
   recordAIOperation({
     operation: task as any,
-    provider: lastProvider as any,
-    model: modelFor(lastProvider),
+    provider: answeringProvider as any,
+    model: modelFor(answeringProvider),
     promptVersion: PROMPT_VERSION,
     result: 'PRIMARY_FAILED_FALLBACK_FAILED',
-    durationMs: 0,
+    durationMs: Date.now() - start,
+    fallbackUsed: false,
   });
   return {
     data: emptyValue,
     meta: {
-      provider: lastProvider,
-      model: modelFor(lastProvider),
-      fallbackUsed,
+      provider: answeringProvider,
+      model: modelFor(answeringProvider),
+      fallbackUsed: false,
       promptVersion: PROMPT_VERSION,
     },
   };
@@ -207,6 +219,29 @@ export async function aiExplainGPA(data: {
       groq: async () => {
         const { groqExplainGPA } = await import('./groq.js');
         return groqExplainGPA(data);
+      },
+    },
+    ''
+  );
+}
+
+/**
+ * Vision extraction — routes multimodal document understanding through the
+ * provider layer. OpenRouter (Gemma) is primary; Gemini is the fallback.
+ * Groq is not routed here because the current Groq provider does not accept
+ * image input.
+ */
+export async function aiVisionExtract(base64: string, mimeType: string): Promise<AIResult<string>> {
+  const { openrouterVisionExtract } = await import('./openrouter.js');
+  const { geminiVisionExtract } = await import('./gemini.js');
+  return withFallback<string>(
+    'extraction',
+    {
+      openrouter: () => openrouterVisionExtract(base64, mimeType),
+      gemini: () => geminiVisionExtract(base64, mimeType),
+      // Groq provider does not support image input — treat as unavailable.
+      groq: async () => {
+        throw new Error('Groq vision not supported');
       },
     },
     ''

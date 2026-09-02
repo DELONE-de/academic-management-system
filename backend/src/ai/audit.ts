@@ -10,6 +10,7 @@ export interface AIAuditEntry {
   promptVersion: string;
   result: AIProviderResult;
   durationMs: number;
+  fallbackUsed?: boolean;
   inputRecordCount?: number;
   outputRecordCount?: number;
   error?: string;
@@ -49,9 +50,12 @@ export function buildAISummary(entries: AIAuditEntry[]): {
   details: Record<string, any>;
 } {
   const errors = entries.filter((e) => e.result === 'PRIMARY_FAILED_FALLBACK_FAILED');
+  // The routing layer records authoritative decision entries with fallbackUsed set.
+  const routingEntries = entries.filter((e) => typeof e.fallbackUsed === 'boolean');
+  const lastRouting = routingEntries[routingEntries.length - 1];
   return {
-    provider: entries[0]?.provider || 'none',
-    fallbackUsed: entries.some((e) => e.result === 'PRIMARY_FAILED_FALLBACK_SUCCESS'),
+    provider: lastRouting?.provider || entries[0]?.provider || 'none',
+    fallbackUsed: lastRouting?.fallbackUsed ?? false,
     operations: entries.length,
     errors: errors.length,
     details: entries.reduce((acc, e, i) => { acc[`op${i + 1}`] = e as any; return acc; }, {} as Record<string, any>),

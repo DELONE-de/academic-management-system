@@ -8,15 +8,13 @@ import {
   parseScoreRows,
 } from '../utils/excel.js';
 import {
-  geminiVisionExtract,
-  ExtractionType,
-} from '../ai/gemini.js';
-import {
   aiExtractStudents,
   aiExtractResults,
   aiValidateWithTools,
+  aiVisionExtract,
   getAIAuditEntries,
 } from '../ai/ai.service.js';
+import { ExtractionType } from '../ai/gemini.js';
 import { validateExtractedStudents, validateExtractedResults } from '../ai/schema.js';
 import { normalizeStudentRecords, normalizeResultRecords, collectNormalizationIssues, NormalizedStudent, NormalizedResult } from '../ai/normalize.js';
 import { detectSuspiciousScorePattern, Anomaly } from '../ai/anomaly.js';
@@ -92,8 +90,8 @@ export async function processUpload(
         message: `Parsed ${records.length} rows from ${content.format.toUpperCase()}`,
       });
     } else {
-      // PDF text or image — send to Gemini for structured extraction
-      sseWrite(res, 'status', { jobId: job.id, message: 'Sending to Gemini for extraction...' });
+      // PDF text or image — send to AI for structured extraction
+      sseWrite(res, 'status', { jobId: job.id, message: 'Sending to AI for extraction...' });
 
       const rawText =
         content.type === 'text'
@@ -102,7 +100,8 @@ export async function processUpload(
 
       let textContent: string;
       if (content.type === 'image') {
-        textContent = await geminiVisionExtract(content.base64, content.mimeType);
+        const visionResult = await aiVisionExtract(content.base64, content.mimeType);
+        textContent = visionResult.data;
       } else {
         textContent = content.text;
       }
