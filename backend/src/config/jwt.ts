@@ -3,8 +3,15 @@
 import jwt, { type SignOptions } from 'jsonwebtoken';
 import { JWTPayload } from '../types/index.js';
 
-// Get JWT configuration from environment
-const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-change-in-production';
+// Get JWT configuration from environment — fail fast if missing
+const JWT_SECRET = (() => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET environment variable is required. Set it before starting the server.');
+  }
+  return secret;
+})();
+
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
 /**

@@ -2,18 +2,30 @@
 
 import { Router } from 'express';
 import { departmentController } from '../controllers/department.controller.js';
-import { authenticate } from '../middleware/auth.middleware.js';
+import { authenticate, authorize } from '../middleware/auth.middleware.js';
 
 const router = Router();
 
 /**
  * @route   GET /api/departments/public
  * @desc    Get all departments (public for signup)
- * @access  Public
+ * @access  Public (read-only)
  */
 router.get('/public', departmentController.findAllPublic);
-router.post('/public', departmentController.create);
-router.delete('/public/:id', departmentController.remove);
+
+/**
+ * @route   POST /api/departments/public
+ * @desc    Create a department
+ * @access  DEAN only — protected
+ */
+router.post('/public', authenticate, authorize('DEAN'), departmentController.create);
+
+/**
+ * @route   DELETE /api/departments/public/:id
+ * @desc    Delete a department
+ * @access  DEAN only — protected
+ */
+router.delete('/public/:id', authenticate, authorize('DEAN'), departmentController.remove);
 
 router.use(authenticate);
 

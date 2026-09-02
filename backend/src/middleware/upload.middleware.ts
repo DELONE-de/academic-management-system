@@ -12,7 +12,6 @@ const ALLOWED_MIMES: Record<string, string> = {
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'excel',
   // CSV
   'text/csv': 'csv',
-  'text/plain': 'csv',
   // PDF
   'application/pdf': 'pdf',
   // Images

@@ -15,10 +15,28 @@ export class AuthController {
     }
   }
 
-  async register(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async register(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const user = await authService.register(req.body);
       sendCreated(res, user, 'User registered successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async bootstrapStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const status = await authService.getBootstrapStatus();
+      sendSuccess(res, status, 'Bootstrap status retrieved');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async bootstrap(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const user = await authService.bootstrapFirstUser(req.body);
+      sendCreated(res, user, 'Initial administrator created successfully');
     } catch (error) {
       next(error);
     }

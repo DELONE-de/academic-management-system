@@ -1,6 +1,7 @@
 // FILE: backend/src/ai/validation.tools.ts
 
 import { FunctionDeclaration, SchemaType } from '@google/generative-ai';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database.js';
 import { gpaService } from '../services/gpa.service.js';
 import { calculateResult } from '../utils/grading.js';
@@ -331,7 +332,7 @@ export async function saveResult(args: {
   courses: Array<{ courseCode: string; score: number }>;
 }): Promise<{ saved: number; skipped: number; gpaRecalculated: boolean; error?: string }> {
   const resolved = await resolveStudent(args.matricNumber, args.departmentCode);
-  if (!resolved) return { saved: 0, skipped: 0, gpaRecalculated: false, error: `Student '${args.matricNumber}' not found` };
+  if (!resolved) return { saved: 0, skipped: 0, gpaRecalculated: false, error: `Student '${args.matricNumber}' not found in department '${args.departmentCode}'` };
 
   const student = await prisma.student.findUnique({
     where: { id: resolved.id },
@@ -353,38 +354,41 @@ export async function saveResult(args: {
   let skipped = 0;
   const gpaGroups = new Map<string, { level: any; semester: any }>();
 
-  for (const c of args.courses) {
-    const course = courseMap.get(c.courseCode.toUpperCase());
-    if (!course) { skipped++; continue; }
+  // Use transaction for atomicity: result upserts + GPA recalculation
+  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    for (const c of args.courses) {
+      const course = courseMap.get(c.courseCode.toUpperCase());
+      if (!course) { skipped++; continue; }
 
-    const calc = calculateResult(c.score, course.unit, student.department.passMark);
+      const calc = calculateResult(c.score, course.unit, student.department.passMark);
 
-    await prisma.result.upsert({
-      where: { studentId_courseId_academicYear: { studentId: student.id, courseId: course.id, academicYear: args.academicYear } },
-      create: {
-        studentId: student.id,
-        courseId: course.id,
-        score: c.score,
-        grade: calc.grade,
-        gradePoint: calc.gradePoint,
-        pxu: calc.pxu,
-        isCarryOver: calc.isCarryOver,
-        level: course.level,
-        semester: course.semester,
-        academicYear: args.academicYear,
-      },
-      update: { score: c.score, grade: calc.grade, gradePoint: calc.gradePoint, pxu: calc.pxu, isCarryOver: calc.isCarryOver },
-    });
+      await tx.result.upsert({
+        where: { studentId_courseId_academicYear: { studentId: student.id, courseId: course.id, academicYear: args.academicYear } },
+        create: {
+          studentId: student.id,
+          courseId: course.id,
+          score: c.score,
+          grade: calc.grade,
+          gradePoint: calc.gradePoint,
+          pxu: calc.pxu,
+          isCarryOver: calc.isCarryOver,
+          level: course.level,
+          semester: course.semester,
+          academicYear: args.academicYear,
+        },
+        update: { score: c.score, grade: calc.grade, gradePoint: calc.gradePoint, pxu: calc.pxu, isCarryOver: calc.isCarryOver },
+      });
 
-    saved++;
-    const key = `${course.level}-${course.semester}`;
-    if (!gpaGroups.has(key)) gpaGroups.set(key, { level: course.level, semester: course.semester });
-  }
+      saved++;
+      const key = `${course.level}-${course.semester}`;
+      if (!gpaGroups.has(key)) gpaGroups.set(key, { level: course.level, semester: course.semester });
+    }
 
-  // Recalculate GPA for each affected level/semester group
-  for (const group of gpaGroups.values()) {
-    await gpaService.calculateSemesterGPA(student.id, group.level, group.semester, args.academicYear);
-  }
+    // Recalculate GPA for each affected level/semester group within the same transaction
+    for (const group of gpaGroups.values()) {
+      await gpaService.calculateSemesterGPA(student.id, group.level, group.semester, args.academicYear, tx);
+    }
+  });
 
   return { saved, skipped, gpaRecalculated: gpaGroups.size > 0 };
 }
@@ -396,11 +400,25 @@ export async function saveResult(args: {
 // This helper resolves either format to the actual DB record.
 // ============================================================
 
-async function resolveStudent(matricNumber: string, departmentCode: string) {
-  return prisma.student.findUnique({
-    where: { matricNumber: matricNumber.toUpperCase() },
-    select: { id: true, departmentId: true, department: { select: { code: true } } },
+async function resolveStudent(matricNumber: string, departmentCode?: string) {
+  const normalized = matricNumber.toUpperCase();
+  const student = await prisma.student.findUnique({
+    where: { matricNumber: normalized },
+    select: {
+      id: true,
+      departmentId: true,
+      department: { select: { code: true } },
+    },
   });
+
+  // If no student found, or the department code is provided and doesn't match,
+  // treat as unresolved — the caller decides whether to flag as missing/mismatch.
+  if (!student) return null;
+  if (departmentCode && student.department.code.toUpperCase() !== departmentCode.toUpperCase()) {
+    return null;
+  }
+
+  return student;
 }
 
 // Dispatcher — called by upload service when Gemini returns a function call

@@ -1,23 +1,29 @@
 // FILE: backend/src/services/gpa.service.ts
 
-import { Level, Semester } from '@prisma/client';
+import { Level, Semester, Prisma } from '@prisma/client';
 import { prisma } from '../config/database.js';
 import { AppError } from '../middleware/error.middleware.js';
 import { calculateGPA, calculateCGPA } from '../utils/grading.js';
 import { GPARecalculationResult } from '../types/index.js';
 
+type PrismaTx = Omit<typeof prisma, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>;
+
 export class GPAService {
   /**
    * Calculate and store semester GPA for a student
+   * Supports optional transaction client for atomic operations.
    */
   async calculateSemesterGPA(
     studentId: string,
     level: Level,
     semester: Semester,
-    academicYear: string
+    academicYear: string,
+    tx?: PrismaTx
   ): Promise<{ semesterGPA: any; cgpa: number }> {
+    const db = tx || prisma;
+
     // Get all results for the semester
-    const results = await prisma.result.findMany({
+    const results = await db.result.findMany({
       where: { studentId, level, semester, academicYear },
       include: {
         course: { select: { unit: true } },
@@ -27,19 +33,19 @@ export class GPAService {
 
     if (results.length === 0) {
       // No results, delete any existing GPA record
-      await prisma.semesterGPA.deleteMany({
+      await db.semesterGPA.deleteMany({
         where: { studentId, level, semester, academicYear },
       });
-      
+
       // Return current CGPA
-      const allGpas = await prisma.semesterGPA.findMany({
+      const allGpas = await db.semesterGPA.findMany({
         where: { studentId },
       });
-      
+
       const cgpaData = calculateCGPA(
         allGpas.map(g => ({ gpa: g.gpa, totalUnits: g.totalUnits, totalPoints: g.totalPoints }))
       );
-      
+
       return { semesterGPA: null, cgpa: cgpaData.cgpa };
     }
 
@@ -51,7 +57,7 @@ export class GPAService {
     );
 
     // Get all other semester GPAs for CGPA calculation
-    const otherGpas = await prisma.semesterGPA.findMany({
+    const otherGpas = await db.semesterGPA.findMany({
       where: {
         studentId,
         NOT: { AND: [{ level }, { semester }, { academicYear }] },
@@ -65,7 +71,7 @@ export class GPAService {
     ]);
 
     // Upsert semester GPA
-    const semesterGPA = await prisma.semesterGPA.upsert({
+    const semesterGPA = await db.semesterGPA.upsert({
       where: {
         studentId_level_semester_academicYear: { studentId, level, semester, academicYear },
       },

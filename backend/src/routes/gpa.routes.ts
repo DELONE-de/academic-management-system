@@ -6,6 +6,7 @@ import { authenticate, authorize } from '../middleware/auth.middleware.js';
 import { validateBody } from '../middleware/validation.middleware.js';
 import { prisma } from '../config/database.js';
 import { geminiExplainGPA } from '../ai/gemini.js';
+import { assertStudentAccess } from '../middleware/access.middleware.js';
 import { AuthRequest } from '../types/index.js';
 import { z } from 'zod';
 
@@ -88,6 +89,17 @@ router.get('/student/:studentId/explain', async (req: AuthRequest, res: Response
 
   if (!level || !semester || !academicYear) {
     res.status(400).json({ success: false, message: 'level, semester, academicYear are required' });
+    return;
+  }
+
+  // Student access check
+  try {
+    await assertStudentAccess(req, req.params.studentId);
+  } catch (err: any) {
+    res.status(err?.message === 'NOT_FOUND' ? 404 : 403).json({
+      success: false,
+      message: err?.message === 'FORBIDDEN' ? 'Access denied' : 'Student not found',
+    });
     return;
   }
 

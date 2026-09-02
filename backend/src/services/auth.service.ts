@@ -66,10 +66,81 @@ export class AuthService {
   }
 
   /**
-   * Registers a new HOD user
+   * Returns whether the system has been bootstrapped (has at least one user).
+   */
+  async getBootstrapStatus(): Promise<{ bootstrapped: boolean; userCount: number }> {
+    const userCount = await prisma.user.count();
+    return { bootstrapped: userCount > 0, userCount };
+  }
+
+  /**
+   * Creates the very first administrator (DEAN) — only allowed when no users exist.
+   * Prevents the chicken-and-egg problem of protected registration while keeping
+   * public privilege escalation impossible once the system is in use.
+   */
+  async bootstrapFirstUser(input: {
+    email: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+    facultyId?: string;
+  }): Promise<any> {
+    const userCount = await prisma.user.count();
+    if (userCount > 0) {
+      throw new AppError('System has already been initialized. Registration requires an administrator.', 403);
+    }
+
+    const { email, password, firstName, lastName, facultyId } = input;
+
+    if (!facultyId) {
+      throw new AppError('Faculty ID is required for the initial DEAN account', 400);
+    }
+
+    const faculty = await prisma.faculty.findUnique({ where: { id: facultyId } });
+    if (!faculty) {
+      throw new AppError('Faculty not found', 404);
+    }
+
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      throw new AppError('Email already registered', 400);
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const user = await prisma.user.create({
+      data: {
+        email,
+        password: hashedPassword,
+        firstName,
+        lastName,
+        role: 'DEAN',
+        facultyId,
+      },
+      include: {
+        faculty: { select: { id: true, name: true, code: true } },
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'UPLOAD_PROCESSED' as any,
+        entityType: 'user',
+        entityId: user.id,
+        actorId: user.id,
+        meta: { event: 'bootstrap_first_user', role: user.role },
+      },
+    });
+
+    const { password: _, ...userWithoutPassword } = user;
+    return userWithoutPassword;
+  }
+
+  /**
+   * Registers a new HOD or DEAN user (requires an authenticated DEAN caller)
    */
   async register(input: RegisterInput): Promise<any> {
-    const { email, password, firstName, lastName, role, departmentId } = input;
+    const { email, password, firstName, lastName, role, departmentId, facultyId } = input;
 
     // Check if email already exists
     const existingUser = await prisma.user.findUnique({
@@ -80,13 +151,22 @@ export class AuthService {
       throw new AppError('Email already registered', 400);
     }
 
-    // Verify department exists
-    const department = await prisma.department.findUnique({
-      where: { id: departmentId },
-    });
+    if (role === 'HOD') {
+      if (!departmentId) throw new AppError('Department ID is required for HOD role', 400);
+      // Verify department exists
+      const department = await prisma.department.findUnique({
+        where: { id: departmentId },
+      });
+      if (!department) throw new AppError('Department not found', 404);
+    }
 
-    if (!department) {
-      throw new AppError('Department not found', 404);
+    if (role === 'DEAN') {
+      if (!facultyId) throw new AppError('Faculty ID is required for DEAN role', 400);
+      // Verify faculty exists
+      const faculty = await prisma.faculty.findUnique({
+        where: { id: facultyId },
+      });
+      if (!faculty) throw new AppError('Faculty not found', 404);
     }
 
     // Hash password
@@ -100,10 +180,14 @@ export class AuthService {
         firstName,
         lastName,
         role,
-        departmentId,
+        ...(role === 'HOD' ? { departmentId } : {}),
+        ...(role === 'DEAN' ? { facultyId } : {}),
       },
       include: {
         department: {
+          select: { id: true, name: true, code: true },
+        },
+        faculty: {
           select: { id: true, name: true, code: true },
         },
       },

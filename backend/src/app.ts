@@ -5,9 +5,14 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
+import rateLimit from 'express-rate-limit';
 
 // Load environment variables
 dotenv.config();
+
+// Validate environment before anything else
+import { validateEnv } from './config/env.js';
+validateEnv();
 
 import routes from './routes/index.js';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware.js';
@@ -16,6 +21,20 @@ import process from 'process';
 
 // Create Express application
 const app: Application = express();
+
+// ======================
+// GLOBAL RATE LIMITING
+// ======================
+
+const globalLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many requests, please try again later' },
+});
+
+app.use(globalLimiter);
 
 // ======================
 // MIDDLEWARE
@@ -130,7 +149,9 @@ process.on('SIGTERM', async () => {
   process.exit(0);
 });
 
-// Start the server
-startServer();
+// Start the server only when run directly (not when imported by tests)
+if (process.env.NODE_ENV !== 'test') {
+  startServer();
+}
 
 export default app;

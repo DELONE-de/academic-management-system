@@ -6,6 +6,7 @@ import Groq from 'groq-sdk';
 import { dispatchToolCall } from './validation.tools.js';
 import { ReviewItemPayload } from '../types/index.js';
 import type { ExtractionType, ExtractedStudent, ExtractedResult } from './gemini.js';
+import { extractStudentsPrompt, extractResultsPrompt, explainGPAPrompt } from './prompts.js';
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || '' });
 
@@ -21,16 +22,7 @@ export async function groqExtractStudents(content: string): Promise<ExtractedStu
     messages: [
       {
         role: 'user',
-        content: `You are extracting student records from the following content.
-Return a JSON array of student objects with these fields:
-rowNumber, matricNumber, firstName, lastName, departmentCode, admissionYear, studentLevel, email (optional), confidence (0.0-1.0).
-
-confidence: 1.0=all fields clear, 0.7-0.9=minor issues, 0.4-0.6=ambiguous, <0.4=major issues.
-
-Return ONLY a valid JSON array, no markdown, no explanation.
-
-Content:
-${content}`,
+        content: extractStudentsPrompt(content),
       },
     ],
     temperature: 0.1,
@@ -54,23 +46,7 @@ export async function groqExtractResults(
     messages: [
       {
         role: 'user',
-        content: `You are extracting student score records from the following content.
-Each student can have MULTIPLE courses and scores.
-The academic year for ALL records is "${academicYear}".
-
-Return a JSON array where each element represents ONE student row with ALL their courses:
-{
-  rowNumber: number,
-  matricNumber: string,
-  academicYear: "${academicYear}",
-  courses: [{ courseCode: string, score: number, confidence: number }],
-  overallConfidence: number
-}
-
-Return ONLY a valid JSON array, no markdown.
-
-Content:
-${content}`,
+        content: extractResultsPrompt(content, academicYear),
       },
     ],
     temperature: 0.1,
@@ -211,13 +187,7 @@ export async function groqExplainGPA(data: {
     messages: [
       {
         role: 'user',
-        content: `Explain in 2-3 plain sentences why ${data.studentName} has a GPA of ${data.gpa.toFixed(2)}.
-
-Results: ${JSON.stringify(data.results)}
-Total units: ${data.totalUnits}, Total quality points: ${data.totalPoints.toFixed(2)}
-
-Be specific — mention the courses that pulled the GPA up or down.
-Write for a non-technical audience (lecturers, HODs).`,
+        content: explainGPAPrompt(data),
       },
     ],
     temperature: 0.3,

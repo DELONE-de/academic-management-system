@@ -14,6 +14,7 @@ import {
   geminiVisionExtract,
   ExtractionType,
 } from '../ai/gemini.js';
+import { validateExtractedStudents, validateExtractedResults } from '../ai/schema.js';
 import { ReviewItemPayload } from '../types/index.js';
 
 // ============================================================
@@ -101,6 +102,39 @@ export async function processUpload(
         uploadType === 'students'
           ? await geminiExtractStudents(textContent)
           : await geminiExtractResults(textContent, academicYear);
+
+      // Validate AI output against strict schemas — reject malformed records
+      if (uploadType === 'students') {
+        const validation = validateExtractedStudents(records);
+        if (!validation.valid) {
+          sseWrite(res, 'status', { jobId: job.id, message: `Schema validation found ${validation.errors?.length} issue(s) in AI output` });
+          records = validation.data || [];
+          if (records.length === 0) {
+            await prisma.uploadJob.update({
+              where: { id: job.id },
+              data: { status: 'REJECTED', aiSummary: `AI output failed schema validation: ${validation.errors?.slice(0, 3).join('; ')}` },
+            });
+            sseWrite(res, 'error', { jobId: job.id, message: 'AI output failed schema validation' });
+            sseEnd(res);
+            return;
+          }
+        }
+      } else {
+        const validation = validateExtractedResults(records);
+        if (!validation.valid) {
+          sseWrite(res, 'status', { jobId: job.id, message: `Schema validation found ${validation.errors?.length} issue(s) in AI output` });
+          records = validation.data || [];
+          if (records.length === 0) {
+            await prisma.uploadJob.update({
+              where: { id: job.id },
+              data: { status: 'REJECTED', aiSummary: `AI output failed schema validation: ${validation.errors?.slice(0, 3).join('; ')}` },
+            });
+            sseWrite(res, 'error', { jobId: job.id, message: 'AI output failed schema validation' });
+            sseEnd(res);
+            return;
+          }
+        }
+      }
 
       sseWrite(res, 'status', {
         jobId: job.id,

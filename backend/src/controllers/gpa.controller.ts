@@ -2,9 +2,10 @@
 
 import { Response, NextFunction } from 'express';
 import { gpaService } from '../services/gpa.service.js';
-import { sendSuccess } from '../utils/response.js';
+import { sendSuccess, sendForbidden } from '../utils/response.js';
 import { AuthRequest } from '../types/index.js';
 import { Level, Semester } from '@prisma/client';
+import { assertStudentAccess, assertDepartmentAccess } from '../middleware/access.middleware.js';
 
 export class GPAController {
   async calculateSemesterGPA(
@@ -30,15 +31,23 @@ export class GPAController {
 
   async getSemesterGPA(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { level, semester, academicYear } = req.query;
+      try {
+        await assertStudentAccess(req, req.params.studentId);
+      } catch (err: any) {
+        res.status(err?.message === 'NOT_FOUND' ? 404 : 403).json({
+          success: false,
+          message: err?.message === 'FORBIDDEN' ? 'Access denied' : 'Student not found',
+        });
+        return;
+      }
 
+      const { level, semester, academicYear } = req.query;
       const gpa = await gpaService.getSemesterGPA(
         req.params.studentId,
         level as Level,
         semester as Semester,
         academicYear as string
       );
-
       sendSuccess(res, gpa, 'GPA retrieved successfully');
     } catch (error) {
       next(error);
@@ -51,6 +60,16 @@ export class GPAController {
     next: NextFunction
   ): Promise<void> {
     try {
+      try {
+        await assertStudentAccess(req, req.params.studentId);
+      } catch (err: any) {
+        res.status(err?.message === 'NOT_FOUND' ? 404 : 403).json({
+          success: false,
+          message: err?.message === 'FORBIDDEN' ? 'Access denied' : 'Student not found',
+        });
+        return;
+      }
+
       const history = await gpaService.getStudentGPAHistory(req.params.studentId);
       sendSuccess(res, history, 'GPA history retrieved successfully');
     } catch (error) {
@@ -93,6 +112,13 @@ export class GPAController {
       let departmentId = req.params.departmentId;
       if (req.user!.role === 'HOD') {
         departmentId = req.user!.departmentId!;
+      } else {
+        try {
+          await assertDepartmentAccess(req, departmentId);
+        } catch {
+          sendForbidden(res, 'Access denied');
+          return;
+        }
       }
 
       const { level, semester, academicYear } = req.query;

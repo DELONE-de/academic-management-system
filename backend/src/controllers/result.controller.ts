@@ -3,10 +3,11 @@
 import { Response, NextFunction } from 'express';
 import { resultService } from '../services/result.service.js';
 import { gpaService } from '../services/gpa.service.js';
-import { sendSuccess, sendBadRequest } from '../utils/response.js';
+import { sendSuccess, sendBadRequest, sendForbidden } from '../utils/response.js';
 import { AuthRequest, AddScoreInput } from '../types/index.js';
 import { Level, Semester } from '@prisma/client';
 import { addScoreSchema } from '../validators/bulk.validator.js';
+import { assertStudentAccess, assertDepartmentAccess } from '../middleware/access.middleware.js';
 
 export class ResultController {
   /**
@@ -72,6 +73,16 @@ export class ResultController {
    */
   async getStudentResults(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
+      try {
+        await assertStudentAccess(req, req.params.studentId);
+      } catch (err: any) {
+        res.status(err?.message === 'NOT_FOUND' ? 404 : 403).json({
+          success: false,
+          message: err?.message === 'FORBIDDEN' ? 'Access denied' : 'Student not found',
+        });
+        return;
+      }
+
       const { level, semester, academicYear } = req.query;
       const results = await resultService.getStudentResults(
         req.params.studentId,
@@ -91,6 +102,16 @@ export class ResultController {
    */
   async getStudentResultsWithGPA(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
+      try {
+        await assertStudentAccess(req, req.params.studentId);
+      } catch (err: any) {
+        res.status(err?.message === 'NOT_FOUND' ? 404 : 403).json({
+          success: false,
+          message: err?.message === 'FORBIDDEN' ? 'Access denied' : 'Student not found',
+        });
+        return;
+      }
+
       const results = await resultService.getStudentResultsWithGPA(req.params.studentId);
       sendSuccess(res, results, 'Results with GPA retrieved successfully');
     } catch (error) {
@@ -104,7 +125,16 @@ export class ResultController {
   async getDepartmentResults(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       let departmentId = req.params.departmentId;
-      if (req.user!.role === 'HOD') departmentId = req.user!.departmentId!;
+      if (req.user!.role === 'HOD') {
+        departmentId = req.user!.departmentId!;
+      } else {
+        try {
+          await assertDepartmentAccess(req, departmentId);
+        } catch {
+          sendForbidden(res, 'Access denied');
+          return;
+        }
+      }
       const { level, semester, academicYear } = req.query;
       const results = await resultService.getDepartmentResults(
         departmentId,
@@ -149,6 +179,16 @@ export class ResultController {
    */
   async getCarryOverCourses(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
+      try {
+        await assertStudentAccess(req, req.params.studentId);
+      } catch (err: any) {
+        res.status(err?.message === 'NOT_FOUND' ? 404 : 403).json({
+          success: false,
+          message: err?.message === 'FORBIDDEN' ? 'Access denied' : 'Student not found',
+        });
+        return;
+      }
+
       const carryOvers = await resultService.getCarryOverCourses(req.params.studentId);
       sendSuccess(res, carryOvers, 'Carry-over courses retrieved successfully');
     } catch (error) {

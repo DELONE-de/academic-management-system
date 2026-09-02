@@ -80,28 +80,7 @@ export const studentsApi = {
     const response = await api.get<ApiResponse<Student[]>>(`/students/department/${departmentId}/level/${level}`);
     return response.data;
   },
-  
-  // Bulk Upload
-  bulkUpload: async (file: File): Promise<ApiResponse<BulkUploadResult> | Blob> => {
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    const response = await api.post('/students/bulk-upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      responseType: 'arraybuffer',
-    });
-    
-    // Check if response is error Excel file
-    const contentType = response.headers['content-type'];
-    if (contentType?.includes('spreadsheet')) {
-      return new Blob([response.data], { type: contentType });
-    }
-    
-    // Parse JSON response
-    const text = new TextDecoder().decode(response.data);
-    return JSON.parse(text) as ApiResponse<BulkUploadResult>;
-  },
-  
+
   downloadTemplate: async (): Promise<Blob> => {
     const response = await api.get('/students/bulk-upload/template', { responseType: 'blob' });
     return response.data;
@@ -176,26 +155,7 @@ export const resultsApi = {
     const response = await api.put<ApiResponse<Result>>(`/results/${resultId}`, { score });
     return response.data;
   },
-  
-  // Bulk Upload
-  bulkUpload: async (file: File): Promise<ApiResponse<BulkUploadResult> | Blob> => {
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    const response = await api.post('/results/bulk-upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      responseType: 'arraybuffer',
-    });
-    
-    const contentType = response.headers['content-type'];
-    if (contentType?.includes('spreadsheet')) {
-      return new Blob([response.data], { type: contentType });
-    }
-    
-    const text = new TextDecoder().decode(response.data);
-    return JSON.parse(text) as ApiResponse<BulkUploadResult>;
-  },
-  
+
   downloadTemplate: async (): Promise<Blob> => {
     const response = await api.get('/results/bulk-upload/template', { responseType: 'blob' });
     return response.data;

@@ -2,6 +2,7 @@
 
 import { Router, Response } from 'express';
 import { authenticate, authorize } from '../middleware/auth.middleware.js';
+import { assertUploadJobAccess, assertReviewItemAccess } from '../middleware/access.middleware.js';
 import { prisma } from '../config/database.js';
 import { AuthRequest } from '../types/index.js';
 import { UserRole } from '@prisma/client';
@@ -16,6 +17,16 @@ router.use(authorize(UserRole.HOD, UserRole.DEAN, UserRole.EXAMINATION_OFFICER, 
  * List all review items for an upload job, with job summary
  */
 router.get('/:jobId', async (req: AuthRequest, res: Response) => {
+  try {
+    await assertUploadJobAccess(req, req.params.jobId);
+  } catch (err: any) {
+    res.status(err?.message === 'NOT_FOUND' ? 404 : 403).json({
+      success: false,
+      message: err?.message === 'FORBIDDEN' ? 'You do not have access to this review' : 'Upload job not found',
+    });
+    return;
+  }
+
   const job = await prisma.uploadJob.findUnique({
     where: { id: req.params.jobId },
     include: {
@@ -35,9 +46,18 @@ router.get('/:jobId', async (req: AuthRequest, res: Response) => {
 /**
  * PATCH /api/review/:itemId
  * Resolve a single review item: accept | reject | edit
- * Body: { resolution: 'accepted' | 'rejected' | 'edited', correctedValue?: string }
  */
 router.patch('/:itemId', async (req: AuthRequest, res: Response) => {
+  try {
+    await assertReviewItemAccess(req, req.params.itemId);
+  } catch (err: any) {
+    res.status(err?.message === 'NOT_FOUND' ? 404 : 403).json({
+      success: false,
+      message: err?.message === 'FORBIDDEN' ? 'You do not have access to this review item' : 'Review item not found',
+    });
+    return;
+  }
+
   const { resolution, correctedValue } = req.body as {
     resolution: 'accepted' | 'rejected' | 'edited';
     correctedValue?: string;
@@ -113,6 +133,16 @@ router.patch('/:itemId', async (req: AuthRequest, res: Response) => {
  * Accept all pending review items for a job at once
  */
 router.post('/:jobId/approve-all', async (req: AuthRequest, res: Response) => {
+  try {
+    await assertUploadJobAccess(req, req.params.jobId);
+  } catch (err: any) {
+    res.status(err?.message === 'NOT_FOUND' ? 404 : 403).json({
+      success: false,
+      message: err?.message === 'FORBIDDEN' ? 'You do not have access to this review' : 'Upload job not found',
+    });
+    return;
+  }
+
   const job = await prisma.uploadJob.findUnique({
     where: { id: req.params.jobId },
     select: { id: true, issuesPending: true },

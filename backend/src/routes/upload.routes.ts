@@ -2,6 +2,7 @@
 
 import { Router, Response } from 'express';
 import { authenticate, authorize } from '../middleware/auth.middleware.js';
+import { assertDepartmentAccess, assertUploadJobAccess } from '../middleware/access.middleware.js';
 import { uploadAI, handleMulterError, getFileType } from '../middleware/upload.middleware.js';
 import { processUpload } from '../services/upload.service.js';
 import { prisma } from '../config/database.js';
@@ -33,6 +34,17 @@ router.post(
 
     if (!departmentId) {
       res.status(400).json({ success: false, message: 'departmentId is required' });
+      return;
+    }
+
+    // Enforce department scope — users may only upload for their own department/faculty
+    try {
+      await assertDepartmentAccess(req, departmentId);
+    } catch (err: any) {
+      res.status(err?.message === 'NOT_FOUND' ? 400 : 403).json({
+        success: false,
+        message: err?.message === 'FORBIDDEN' ? 'You can only upload for your own department' : 'Department not found',
+      });
       return;
     }
 
@@ -100,6 +112,16 @@ router.get('/', async (req: AuthRequest, res: Response) => {
  * Get upload job status and summary
  */
 router.get('/:jobId', async (req: AuthRequest, res: Response) => {
+  try {
+    await assertUploadJobAccess(req, req.params.jobId);
+  } catch (err: any) {
+    res.status(err?.message === 'NOT_FOUND' ? 404 : 403).json({
+      success: false,
+      message: err?.message === 'FORBIDDEN' ? 'You do not have access to this upload' : 'Upload job not found',
+    });
+    return;
+  }
+
   const job = await prisma.uploadJob.findUnique({
     where: { id: req.params.jobId },
     include: { reviewItems: true },
@@ -118,6 +140,16 @@ router.get('/:jobId', async (req: AuthRequest, res: Response) => {
  * Reconnect SSE stream to get current job status (for page refresh recovery)
  */
 router.get('/:jobId/stream', async (req: AuthRequest, res: Response) => {
+  try {
+    await assertUploadJobAccess(req, req.params.jobId);
+  } catch (err: any) {
+    res.status(err?.message === 'NOT_FOUND' ? 404 : 403).json({
+      success: false,
+      message: err?.message === 'FORBIDDEN' ? 'You do not have access to this upload' : 'Upload job not found',
+    });
+    return;
+  }
+
   const job = await prisma.uploadJob.findUnique({
     where: { id: req.params.jobId },
     select: { id: true, status: true, aiSummary: true, totalRows: true, issuesFound: true, issuesFixed: true, issuesPending: true },

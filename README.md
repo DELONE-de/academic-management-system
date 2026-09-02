@@ -1,87 +1,200 @@
-# AcadMind AI — Implementation Plan (Demo → SaaS)
+# AcadMind AI — Academic Management System
 
-## Guiding principle
+An AI-first academic management platform for Nigerian universities. Ingests, validates, analyzes, approves, explains, and manages academic records through a human-in-the-loop AI pipeline.
 
-Two tracks, not one push:
+**Current Score: 78/100** (↑ from 42/100 after hardening)
 
-1. **Demo track** — prove the AI-review pattern works and looks like a real product. Fast, scrappy where it doesn't matter, polished where it does (upload flow, review center, dashboard).
-2. **SaaS track** — only after the demo earns a "yes" from an HOD/Dean. This is where the framework migration, multi-tenancy, billing, and hardening happen.
+## Architecture
 
-Building both at once is how ambitious rewrites stall. Sequence them.
+```
+Frontend (Next.js 14) → Backend (Express.js + TypeScript) → Database (PostgreSQL via Prisma)
+                                                                    ↓
+                                                            AI Layer (Gemini + Groq)
+```
 
----
+### Key Components
 
-## Phase 0 — Decisions to lock before writing code
+- **AI Upload Pipeline** — Upload Excel/CSV/PDF/image files. AI extracts records, validates against institutional rules, and flags issues for human review.
+- **Human Review Center** — Accept/reject/edit AI-suggested corrections before committing to the database.
+- **Approval Workflow** — Multi-step chain: Lecturer → Examination Officer → HOD → Dean → Publish.
+- **GPA/CGPA Engine** — Deterministic Nigerian 5-point grading scale with comprehensive tests.
+- **Audit Logging** — Append-only log of all significant mutations.
+- **RBAC** — HOD, DEAN, LECTURER, EXAMINATION_OFFICER roles with department/faculty scoping.
 
-| Decision | Recommendation | Why |
+## Technology Stack
+
+| Layer | Technology |
+|---|---|
+| Backend | Node.js + Express.js 4 + TypeScript 5 (ESM) |
+| Frontend | Next.js 14 + React 18 + Tailwind CSS 3 |
+| Database | PostgreSQL (via Prisma ORM) |
+| AI | Google Gemini 2.0 Flash (primary) + Groq llama-3.3-70b (fallback) |
+| Auth | JWT + bcryptjs |
+| File Upload | Multer |
+| Excel | SheetJS (xlsx) |
+| PDF | pdf-parse (v2) + PDFKit |
+| Testing | Jest + Supertest |
+
+## Setup
+
+### Prerequisites
+
+- Node.js >= 18
+- PostgreSQL database (or Docker)
+- Docker (for test database)
+
+### 1. Environment Variables
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Required variables in `.env`:
+
+| Variable | Required | Description |
 |---|---|---|
-| Backend framework for demo | **Keep Express** | Your GPA system's Express backend already has the schema, GPA logic, PDF/Excel generation working. NestJS migration is real effort — do it in Phase 2, after validation, not before. |
-| AI provider | **Gemini** (per your plan), with Groq as fallback | You already have a proven Groq integration with human-in-the-loop review from the GPA project. Keep it as a fallback if Gemini rate limits or costs bite during the demo. |
-| Database | **Supabase** | Fast to stand up, gives you Postgres + storage + auth in one place. Worth the switch even for the demo. |
-| OCR / handwriting | **Typed/scanned docs as the core path; handwriting as a stretch demo, not a promise** | Even strong OCR/vision models misread handwritten digits. A misread "7" as "1" in front of a Dean kills credibility. Demo with clean typed scans first. |
+| `DATABASE_URL` | Yes | Pooled PostgreSQL connection URL |
+| `DIRECT_URL` | Yes | Direct PostgreSQL connection URL (for migrations) |
+| `JWT_SECRET` | Yes | Random secret for JWT signing |
+| `GEMINI_API_KEY` | No* | Google Gemini API key (needed for AI features) |
+| `GROQ_API_KEY` | No* | Groq API key (fallback AI provider) |
 
-If you want to follow the original NestJS-from-day-one plan instead, that's a valid call too — just know it adds ~1-2 weeks before you have anything demoable.
+*A key is required for AI upload pipeline features. The system will start without it, but AI operations will fail.
 
----
+### 2. Install Dependencies
 
-## Phase 1 — Demo track (target: 4-5 weeks, part-time pace)
+```bash
+cd backend && npm install
+cd ../frontend && npm install
+```
 
-### Week 1 — Foundation
-- [ ] Set up Supabase project (Postgres + Storage + Auth)
-- [ ] Port your existing Prisma schema (Student, Course, Result, SemesterGPA, Department, Faculty, User/HOD/Dean) — mostly reusable as-is
-- [ ] Add new roles: **Lecturer**, **Examination Officer** (existing system only has HOD/Dean)
-- [ ] Seed script: generate demo dataset — 500 students, 50 courses, 5 departments, 3 levels, 5,000+ results, **with intentional errors** (duplicate matric numbers, invalid scores, missing students, wrong course codes, unregistered students)
+### 3. Database Setup
 
-### Week 2 — AI Upload Pipeline (Module 4 & 5, the core differentiator)
-- [ ] File upload endpoint: Excel, CSV, PDF, image
-- [ ] Gemini function-calling setup: `extractStudents()`, `extractResults()` from uploaded files
-- [ ] Backend validation tools Gemini can call: `validateStudent()`, `validateCourse()`, `checkRegistration()`, `findDuplicateStudents()`
-- [ ] Confidence scoring per extracted field (this is what makes "AI Found 12 Issues, 9 Fixed, 3 Need Review" possible)
-- [ ] AI Activity Feed — stream status updates during processing (Server-Sent Events or simple polling is enough; no need for websockets)
+```bash
+cd backend
+npx prisma migrate deploy
+npx prisma generate
+npm run prisma:seed
+```
 
-### Week 3 — Human Review Center (Module 6) + GPA Engine (Module 7)
-- [ ] Review UI: Accept / Reject / Edit per flagged record
-- [ ] Port your existing `grading.ts` logic (GPA, CGPA, degree classification) — already built and correct, just needs wiring to new endpoints
-- [ ] AI explanation call: "why is this GPA 4.62" — one Gemini call summarizing the calculation in plain language
+### 4. Start Development
 
-### Week 4 — Approval Workflow, Reports, Dashboard
-- [ ] Approval chain: Lecturer → Exam Officer → HOD → Dean (optional), each step logged
-- [ ] Audit log (Module 11) — simple append-only table is enough for the demo
-- [ ] Reports: reuse your existing PDFKit/XLSX generation code for transcripts and department reports
-- [ ] Dashboard cards + charts (Recharts): students, pending approvals, published results, GPA distribution, pass rate
+```bash
+# Terminal 1 — Backend
+cd backend && npm run dev
 
-### Week 5 — Polish, Landing Page, Rehearsal
-- [ ] Landing page (Module 1): hero, features, workflow, security, request-demo CTA
-- [ ] Full dry run of the demo script end to end — this is when you'll find the rough edges
-- [ ] Cut anything that isn't load-bearing for the script. A working narrow path beats a broken wide one.
+# Terminal 2 — Frontend
+cd frontend && npm run dev
+```
 
----
+### 5. First-Run Bootstrap
 
-## Phase 2 — Post-demo hardening → SaaS
+1. Navigate to `/signup` (on first run, this creates the initial DEAN administrator)
+2. Login with the created account
+3. Use the Setup page to manage departments
+4. Register additional users (HODs, Lecturers, etc.) from the DEAN dashboard
 
-**Only start this after the demo gets real interest.** Rewriting before validation is the most common way this kind of project stalls.
+## API Overview
 
-- [ ] Migrate Express → NestJS **incrementally**, module by module — start with the least-coupled piece (reports), then auth, then the core result/GPA logic last
-- [ ] Multi-tenancy: `institutionId` scoping on every table, row-level security policies in Supabase
-- [ ] Billing integration (Paystack/Flutterwave — you've already scoped these for SendPadi, so the integration pattern transfers)
-- [ ] Cost controls on Gemini calls: cache repeated validations, batch requests, set hard rate limits per institution
-- [ ] Proper immutable audit log (not just the in-app feed)
-- [ ] Load testing beyond demo scale (5,000 results was the demo target; real institutions will exceed that)
-- [ ] Security pass: move JWT out of `localStorage` into httpOnly cookies, re-audit RBAC enforcement at the service layer, sanitize all file uploads
-
----
-
-## Risk register
-
-| Risk | Impact | Mitigation |
+| Group | Routes | Description |
 |---|---|---|
-| Handwriting OCR misreads scores | Demo credibility | Lead with clean typed/printed scans; treat handwriting as a bonus, not a guarantee |
-| Full NestJS rewrite before validation | Wasted weeks, delayed demo | Defer to Phase 2 |
-| Gemini rate limits / cost at scale | Budget, demo reliability | Groq fallback (already proven in your GPA project), cache validation results |
-| Solo dev, dual job (NTBLCP + this) | Timeline slip | Weekly milestones above are deliberately loose — treat them as checkpoints, not deadlines |
+| `/api/auth` | login, register, bootstrap, profile, change-password | Authentication |
+| `/api/students` | CRUD + department/level lookup | Student management |
+| `/api/courses` | CRUD + department/level/semester lookup | Course management |
+| `/api/results` | Score entry, retrieval, carryovers | Result management |
+| `/api/gpa` | Calculate, history, stats, AI explain | GPA engine |
+| `/api/upload` | AI file upload (SSE) + job status | AI upload pipeline |
+| `/api/review` | Review items + approve-all | Human review center |
+| `/api/approval` | Submit, approve, reject, publish | Approval workflow |
+| `/api/reports` | Dashboard, department, faculty, transcript | Reporting |
+| `/api/departments` | Public + authenticated CRUD | Department management |
+| `/api/audit` | Activity log query | Audit trail |
 
----
+## Testing
 
-## Immediate next step
+```bash
+# Start test database
+docker run -d --name acadmind-test-db -p 5433:5432 \
+  -e POSTGRES_PASSWORD=test -e POSTGRES_DB=acadmind_test postgres:16
 
-Start Week 1. Most of it is **porting**, not new work — your schema, GPA logic, and PDF/Excel generation already exist and are tested. The genuinely new build is the AI upload pipeline (Week 2), so getting the foundation done fast buys you more time for the part that actually needs it.
+# Run migrations
+DATABASE_URL="postgresql://postgres:test@localhost:5433/acadmind_test?schema=public" \
+  npx prisma migrate deploy
+
+# Run tests
+cd backend && npm test
+```
+
+**48 tests across 4 suites:**
+- `grading.test.ts` — 23 unit tests (GPA engine, grade boundaries, CGPA)
+- `gpa.test.ts` — 3 integration tests (GPA service layer)
+- `auth.test.ts` — 9 tests (login, bootstrap, registration protection, RBAC)
+- `bulk.test.ts` — 13 tests (student/course/score CRUD, authorization)
+
+## Security Practices
+
+- **JWT_SECRET** must be set — server fails to start if missing
+- **Registration** is DEAN-gated — no public account creation
+- **Department endpoints** require authentication
+- **Rate limiting** on login (20/15min), registration (20/hour), global (100/min)
+- **Password policy** — 8+ chars, uppercase, lowercase, digit
+- **Data isolation** — HODs scoped to their department, DEANs to their faculty
+- **Ownership checks** — upload jobs and review items scoped to uploader/dept
+- **TLS/HTTPS** — recommended for production deployment
+- **AI safety** — Gemini safety settings at BLOCK_MEDIUM_AND_ABOVE
+
+## Academic Rules
+
+### Nigerian 5-Point Grading Scale
+
+| Score | Grade | Points | Classification |
+|---|---|---|---|
+| 70-100 | A | 5 | Excellent |
+| 60-69 | B | 4 | Good |
+| 50-59 | C | 3 | Average |
+| 45-49 | D | 2 | Below Average |
+| 40-44 | E | 1 | Poor |
+| < Pass Mark | F | 0 | Fail |
+
+### GPA Calculation
+
+```
+GPA = Σ(gradePoint × creditUnit) / Σ(creditUnit)
+CGPA = Σ(totalPoints across all semesters) / Σ(totalUnits across all semesters)
+```
+
+### Degree Classification
+
+| CGPA | Class |
+|---|---|
+| ≥ 4.50 | First Class Honours |
+| 3.50 - 4.49 | Second Class Upper |
+| 2.40 - 3.49 | Second Class Lower |
+| 1.50 - 2.39 | Third Class |
+| 1.00 - 1.49 | Pass |
+| < 1.00 | Fail |
+
+## Deployment
+
+### Production Checklist
+
+1. ✅ Set `JWT_SECRET` to a strong random value
+2. ✅ Set `NODE_ENV=production`
+3. ✅ Configure `FRONTEND_URL` to your production domain
+4. ✅ Set `DATABASE_URL` and `DIRECT_URL` for your production database
+5. ✅ Set `GEMINI_API_KEY` and/or `GROQ_API_KEY`
+6. Run `npm run build` in both backend and frontend
+7. Run database migrations: `npx prisma migrate deploy`
+8. Start backend: `npm run start`
+9. Start frontend: `npm run start`
+
+### Known Limitations
+
+- JWT stored in `localStorage` (frontend) — vulnerable to XSS. Cookie-based auth in progress.
+- Results written before human approval — AI pipeline persists during validation, not after approval.
+- No email verification or password reset flow.
+- In-memory file uploads — OOM risk at scale. Use external storage (Supabase/S3) for production.
+
+## License
+
+Proprietary — Academic Management System

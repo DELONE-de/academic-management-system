@@ -1,10 +1,16 @@
 // FILE: backend/src/utils/file-extractor.ts
 
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const pdfParse = require('pdf-parse');
+import { PDFParse } from 'pdf-parse';
 import { parseExcelBuffer, parseStudentRows, parseScoreRows } from './excel.js';
 import { geminiVisionExtract } from '../ai/gemini.js';
+
+// pdf-parse v2 exposes a class-like `PDFParse`. Normalize to a callable.
+type PdfParseResult = { text?: string; numpages?: number; info?: any };
+async function parsePdf(buffer: Buffer): Promise<PdfParseResult> {
+  // PDFParse can be invoked with the buffer directly in v2.
+  const result = await (PDFParse as any)(buffer);
+  return result as PdfParseResult;
+}
 
 export type ExtractedFileContent =
   | { type: 'structured'; rows: any[]; format: 'excel' | 'csv' }
@@ -30,7 +36,7 @@ export async function extractFileContent(
 
     case 'pdf': {
       try {
-        const parsed = await pdfParse(buffer);
+        const parsed = await parsePdf(buffer);
         const text = parsed.text?.trim();
 
         if (text && text.length > 50) {

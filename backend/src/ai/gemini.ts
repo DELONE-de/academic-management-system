@@ -9,6 +9,14 @@ import {
 import { validationFunctionDeclarations, dispatchToolCall } from './validation.tools.js';
 import { ReviewItemPayload } from '../types/index.js';
 import {
+  visionExtractPrompt,
+  extractStudentsPrompt,
+  extractResultsPrompt,
+  validateStudentsPrompt,
+  validateResultsPrompt,
+  explainGPAPrompt,
+} from './prompts.js';
+import {
   groqExtractStudents,
   groqExtractResults,
   groqValidateWithTools,
@@ -26,8 +34,10 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 const MODEL = 'gemini-2.0-flash';
 
 const SAFETY = [
-  { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+  { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+  { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+  { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
 ];
 
 // ============================================================
@@ -44,10 +54,7 @@ export async function geminiVisionExtract(
     {
       inlineData: { data: base64, mimeType: mimeType as any },
     },
-    `Extract all text from this document exactly as it appears. 
-     Focus on tabular data: student names, matric numbers, course codes, and scores.
-     Preserve the table structure using | as column separators.
-     Do not summarize or interpret — output raw text only.`,
+    visionExtractPrompt(),
   ]);
 
   return result.response.text();
@@ -89,20 +96,7 @@ export async function geminiExtractStudents(
   try {
     const model = genAI.getGenerativeModel({ model: MODEL, safetySettings: SAFETY });
     const result = await model.generateContent([
-      `You are extracting student records from the following content.
-     Return a JSON array of student objects with these fields:
-     rowNumber, matricNumber, firstName, lastName, departmentCode, admissionYear, studentLevel, email (optional), confidence (0.0-1.0).
-     
-     confidence rules:
-     - 1.0 = all fields clearly present and well-formatted
-     - 0.7-0.9 = minor formatting issues but data is clear
-     - 0.4-0.6 = some fields ambiguous or missing
-     - below 0.4 = major issues
-     
-     Return ONLY valid JSON array, no markdown, no explanation.
-     
-     Content:
-     ${content}`,
+      extractStudentsPrompt(content),
     ]);
     const text = result.response.text().trim();
     const json = text.replace(/^```json\n?/, '').replace(/\n?```$/, '');
@@ -123,33 +117,7 @@ export async function geminiExtractResults(
   try {
     const model = genAI.getGenerativeModel({ model: MODEL, safetySettings: SAFETY });
     const result = await model.generateContent([
-      `You are extracting student score records from the following content.
-     Each student can have MULTIPLE courses and scores.
-     Matric number format is YYYY/NNNN e.g. 2025/5337 — extract exactly as written.
-     The academic year for ALL records is "${academicYear}" — do not read it from the content.
-     
-     Return a JSON array where each element represents ONE student row with ALL their courses:
-     {
-       rowNumber: number,
-       matricNumber: string,   // e.g. "2025/5337"
-       academicYear: "${academicYear}",
-       courses: [
-         { courseCode: string, score: number, confidence: number },
-         ...
-       ],
-       overallConfidence: number  // lowest confidence across all courses
-     }
-     
-     Per-course confidence:
-     - 1.0 = course code and score clearly readable
-     - 0.7-0.9 = minor ambiguity
-     - 0.4-0.6 = course code or score unclear
-     - below 0.4 = unreadable
-     
-     Return ONLY valid JSON array, no markdown.
-     
-     Content:
-     ${content}`,
+      extractResultsPrompt(content, academicYear),
     ]);
     const text = result.response.text().trim();
     const json = text.replace(/^```json\n?/, '').replace(/\n?```$/, '');
@@ -200,17 +168,8 @@ async function _geminiValidateWithTools(
 
   const prompt =
     type === 'students'
-      ? `Validate these student records by calling validateStudent for each one,
-         then call findDuplicateStudents with all matric numbers at the end.
-         Records: ${JSON.stringify(records)}`
-      : `Validate and save these score records. Department code is "${departmentCode}" (from the system — do not read from file).
-         For each student row, follow this exact sequence:
-         1. Call checkRegistration with matricNumber, departmentCode "${departmentCode}", and ALL their courseCodes
-         2. Call validateCourse with departmentCode "${departmentCode}", academicYear, and ALL their courses (courseCode + score)
-         3. If BOTH pass (no issues), call saveResult with matricNumber, departmentCode "${departmentCode}", academicYear, and the courses array
-         4. If either check fails, do NOT call saveResult — flag the issues instead
-         Process all students. Pass all courses in one call per student — do not call per course.
-         Records: ${JSON.stringify(records.map(({ rawRecord: _, ...r }) => r))}`;
+      ? validateStudentsPrompt(records)
+      : validateResultsPrompt(records, departmentCode);
 
   const chat = model.startChat();
   let response = await chat.sendMessage(prompt);
@@ -342,13 +301,7 @@ export async function geminiExplainGPA(data: {
   try {
     const model = genAI.getGenerativeModel({ model: MODEL, safetySettings: SAFETY });
     const result = await model.generateContent([
-      `Explain in 2-3 plain sentences why ${data.studentName} has a GPA of ${data.gpa.toFixed(2)}.
-     
-     Results: ${JSON.stringify(data.results)}
-     Total units: ${data.totalUnits}, Total quality points: ${data.totalPoints.toFixed(2)}
-     
-     Be specific — mention the courses that pulled the GPA up or down.
-     Write for a non-technical audience (lecturers, HODs).`,
+      explainGPAPrompt(data),
     ]);
     return result.response.text();
   } catch (err) {

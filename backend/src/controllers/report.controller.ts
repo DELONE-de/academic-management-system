@@ -2,9 +2,10 @@
 
 import { Response, NextFunction } from 'express';
 import { reportService } from '../services/report.service.js';
-import { sendSuccess } from '../utils/response.js';
+import { sendSuccess, sendForbidden } from '../utils/response.js';
 import { AuthRequest } from '../types/index.js';
 import { Level, Semester } from '@prisma/client';
+import { assertDepartmentAccess, assertStudentAccess } from '../middleware/access.middleware.js';
 import {
   generateDepartmentReportPDF,
   generateTranscriptPDF,
@@ -21,6 +22,13 @@ export class ReportController {
       let departmentId = req.params.departmentId;
       if (req.user!.role === 'HOD') {
         departmentId = req.user!.departmentId!;
+      } else {
+        try {
+          await assertDepartmentAccess(req, departmentId);
+        } catch {
+          sendForbidden(res, 'Access denied');
+          return;
+        }
       }
 
       const { level, semester, academicYear } = req.query;
@@ -47,6 +55,13 @@ export class ReportController {
       let departmentId = req.params.departmentId;
       if (req.user!.role === 'HOD') {
         departmentId = req.user!.departmentId!;
+      } else {
+        try {
+          await assertDepartmentAccess(req, departmentId);
+        } catch {
+          sendForbidden(res, 'Access denied');
+          return;
+        }
       }
 
       const { level, semester, academicYear } = req.query;
@@ -102,6 +117,16 @@ export class ReportController {
     next: NextFunction
   ): Promise<void> {
     try {
+      try {
+        await assertStudentAccess(req, req.params.studentId);
+      } catch (err: any) {
+        res.status(err?.message === 'NOT_FOUND' ? 404 : 403).json({
+          success: false,
+          message: err?.message === 'FORBIDDEN' ? 'Access denied' : 'Student not found',
+        });
+        return;
+      }
+
       const transcript = await reportService.getStudentTranscript(req.params.studentId);
       sendSuccess(res, transcript, 'Transcript retrieved successfully');
     } catch (error) {
@@ -115,6 +140,16 @@ export class ReportController {
     next: NextFunction
   ): Promise<void> {
     try {
+      try {
+        await assertStudentAccess(req, req.params.studentId);
+      } catch (err: any) {
+        res.status(err?.message === 'NOT_FOUND' ? 404 : 403).json({
+          success: false,
+          message: err?.message === 'FORBIDDEN' ? 'Access denied' : 'Student not found',
+        });
+        return;
+      }
+
       const transcript = await reportService.getStudentTranscript(req.params.studentId);
 
       await generateTranscriptPDF(res, {

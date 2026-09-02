@@ -104,15 +104,9 @@ export default function LoginPage() {
 
           <div className="mt-6 text-center space-y-2">
             <p className="text-sm text-gray-600">
-              Don't have an account?{' '}
-              <a href="/signup" className="text-primary-600 hover:text-primary-700 font-medium">
-                Sign up
-              </a>
-            </p>
-            <p className="text-sm text-gray-600">
               First time?{' '}
-              <a href="/setup" className="text-primary-600 hover:text-primary-700 font-medium">
-                Set up faculties & departments
+              <a href="/signup" className="text-primary-600 hover:text-primary-700 font-medium">
+                Initialize system
               </a>
             </p>
           </div>

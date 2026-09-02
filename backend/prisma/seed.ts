@@ -389,234 +389,44 @@ async function main() {
 
   console.log('✅ Created courses');
 
-  // Health Information Management Students - LEVEL 100, Admission Year 2024
-  await prisma.student.create({
-    data: {
-      matricNumber: '2024/1813',
-      firstName: 'Alawode',
-      lastName: 'Adebusola Peace',
-      currentLevel: 'LEVEL_100',
-      admissionYear: 2024,
-      isActive: true,
-      departmentId: departmentHealthInformationManagement.id,
-    },
-  });
+  // ============================================================
+  // SYNTHETIC DEMO STUDENTS — all names are fictional
+  // ============================================================
+  const syntheticStudents = [
+    { matricNumber: '2024/1001', firstName: 'Ade', lastName: 'Demo One' },
+    { matricNumber: '2024/1002', firstName: 'Bisi', lastName: 'Demo Two' },
+    { matricNumber: '2024/1003', firstName: 'Chidi', lastName: 'Demo Three' },
+    { matricNumber: '2024/1004', firstName: 'Damilola', lastName: 'Demo Four' },
+    { matricNumber: '2024/1005', firstName: 'Emeka', lastName: 'Demo Five' },
+    { matricNumber: '2024/1006', firstName: 'Fatima', lastName: 'Demo Six' },
+    { matricNumber: '2024/1007', firstName: 'Grace', lastName: 'Demo Seven' },
+    { matricNumber: '2024/1008', firstName: 'Ibrahim', lastName: 'Demo Eight' },
+    { matricNumber: '2024/1009', firstName: 'Jumoke', lastName: 'Demo Nine' },
+    { matricNumber: '2024/1010', firstName: 'Kelechi', lastName: 'Demo Ten' },
+    { matricNumber: '2024/1011', firstName: 'Latifat', lastName: 'Demo Eleven' },
+    { matricNumber: '2024/1012', firstName: 'Musa', lastName: 'Demo Twelve' },
+    { matricNumber: '2024/1013', firstName: 'Ngozi', lastName: 'Demo Thirteen' },
+    { matricNumber: '2024/1014', firstName: 'Obinna', lastName: 'Demo Fourteen' },
+    { matricNumber: '2024/1015', firstName: 'Peace', lastName: 'Demo Fifteen' },
+    { matricNumber: '2024/1016', firstName: 'Rahman', lastName: 'Demo Sixteen' },
+    { matricNumber: '2024/1017', firstName: 'Sade', lastName: 'Demo Seventeen' },
+    { matricNumber: '2024/1018', firstName: 'Tunde', lastName: 'Demo Eighteen' },
+    { matricNumber: '2024/1019', firstName: 'Uche', lastName: 'Demo Nineteen' },
+  ];
 
-  await prisma.student.create({
-    data: {
-      matricNumber: '2024/3272',
-      firstName: 'Nurudeen',
-      lastName: 'Aishat Olanike',
-      currentLevel: 'LEVEL_100',
-      admissionYear: 2024,
-      isActive: true,
-      departmentId: departmentHealthInformationManagement.id,
-    },
-  });
-
-  await prisma.student.create({
-    data: {
-      matricNumber: '2024/1842',
-      firstName: 'Abdulazeez',
-      lastName: 'Aishat Wuraola',
-      currentLevel: 'LEVEL_100',
-      admissionYear: 2024,
-      isActive: true,
-      departmentId: departmentHealthInformationManagement.id,
-    },
-  });
-
-  await prisma.student.create({
-    data: {
-      matricNumber: '2024/0715',
-      firstName: 'Uwedone',
-      lastName: 'Bose Gloria',
-      currentLevel: 'LEVEL_100',
-      admissionYear: 2024,
-      isActive: true,
-      departmentId: departmentHealthInformationManagement.id,
-    },
-  });
-
-  await prisma.student.create({
-    data: {
-      matricNumber: '2024/1916',
-      firstName: 'Igbelleh',
-      lastName: 'Daniella',
-      currentLevel: 'LEVEL_100',
-      admissionYear: 2024,
-      isActive: true,
-      departmentId: departmentHealthInformationManagement.id,
-    },
-  });
-
-  await prisma.student.create({
-    data: {
-      matricNumber: '2024/0276',
-      firstName: 'Akinlade',
-      lastName: 'Dolapo Anointed',
-      currentLevel: 'LEVEL_100',
-      admissionYear: 2024,
-      isActive: true,
-      departmentId: departmentHealthInformationManagement.id,
-    },
-  });
-
-  await prisma.student.create({
-    data: {
-      matricNumber: '2024/3426',
-      firstName: 'Adekanmi',
-      lastName: 'Folasade Oluwadarasimi',
-      currentLevel: 'LEVEL_100',
-      admissionYear: 2024,
-      isActive: true,
-      departmentId: departmentHealthInformationManagement.id,
-    },
-  });
-
-  await prisma.student.create({
-    data: {
-      matricNumber: '2024/2231',
-      firstName: 'Aderinto',
-      lastName: 'hikmoh Adekemi',
-      currentLevel: 'LEVEL_100',
-      admissionYear: 2024,
-      isActive: true,
-      departmentId: departmentHealthInformationManagement.id,
-    },
-  });
-
-  await prisma.student.create({
-    data: {
-      matricNumber: '2024/1473',
-      firstName: 'Alimi',
-      lastName: 'Isiamiat Omolara',
-      currentLevel: 'LEVEL_100',
-      admissionYear: 2024,
-      isActive: true,
-      departmentId: departmentHealthInformationManagement.id,
-    },
-  });
-
-  await prisma.student.create({
-    data: {
-      matricNumber: '2024/0321',
-      firstName: 'Sunday',
-      lastName: 'Mary Funmilayo',
-      currentLevel: 'LEVEL_100',
-      admissionYear: 2024,
-      isActive: true,
-      departmentId: departmentHealthInformationManagement.id,
-    },
-  });
-
-  await prisma.student.create({
-    data: {
-      matricNumber: '2024/1850',
-      firstName: 'Iehunwa',
-      lastName: 'Mercy Olayemi',
-      currentLevel: 'LEVEL_100',
-      admissionYear: 2024,
-      isActive: true,
-      departmentId: departmentHealthInformationManagement.id,
-    },
-  });
-
-  await prisma.student.create({
-    data: {
-      matricNumber: '2024/2170',
-      firstName: 'Olanite',
-      lastName: 'Nafisat Eniola',
-      currentLevel: 'LEVEL_100',
-      admissionYear: 2024,
-      isActive: true,
-      departmentId: departmentHealthInformationManagement.id,
-    },
-  });
-
-  await prisma.student.create({
-    data: {
-      matricNumber: '2024/2943',
-      firstName: 'Ayetimiyi',
-      lastName: 'Oladuni Esther',
-      currentLevel: 'LEVEL_100',
-      admissionYear: 2024,
-      isActive: true,
-      departmentId: departmentHealthInformationManagement.id,
-    },
-  });
-
-  await prisma.student.create({
-    data: {
-      matricNumber: '2024/3036',
-      firstName: 'Dada',
-      lastName: 'Oluwanifemi Oluwabukunmi',
-      currentLevel: 'LEVEL_100',
-      admissionYear: 2024,
-      isActive: true,
-      departmentId: departmentHealthInformationManagement.id,
-    },
-  });
-
-  await prisma.student.create({
-    data: {
-      matricNumber: '2024/1474',
-      firstName: 'Oyewole',
-      lastName: 'Opeyemi Elizabeth',
-      currentLevel: 'LEVEL_100',
-      admissionYear: 2024,
-      isActive: true,
-      departmentId: departmentHealthInformationManagement.id,
-    },
-  });
-
-  await prisma.student.create({
-    data: {
-      matricNumber: '2024/1862',
-      firstName: 'Adetula',
-      lastName: 'Praises Adewura',
-      currentLevel: 'LEVEL_100',
-      admissionYear: 2024,
-      isActive: true,
-      departmentId: departmentHealthInformationManagement.id,
-    },
-  });
-
-  await prisma.student.create({
-    data: {
-      matricNumber: '2024/1295',
-      firstName: 'Adebiyi',
-      lastName: 'PraiseGod Ibukunoluwa',
-      currentLevel: 'LEVEL_100',
-      admissionYear: 2024,
-      isActive: true,
-      departmentId: departmentHealthInformationManagement.id,
-    },
-  });
-
-  await prisma.student.create({
-    data: {
-      matricNumber: '2024/3268',
-      firstName: 'Oyeleye',
-      lastName: 'Tobiloba Olamide',
-      currentLevel: 'LEVEL_100',
-      admissionYear: 2024,
-      isActive: true,
-      departmentId: departmentHealthInformationManagement.id,
-    },
-  });
-
-  await prisma.student.create({
-    data: {
-      matricNumber: '2024/0859',
-      firstName: 'Akinmoladun',
-      lastName: 'Yosola Precoius',
-      currentLevel: 'LEVEL_100',
-      admissionYear: 2024,
-      isActive: true,
-      departmentId: departmentHealthInformationManagement.id,
-    },
-  });
+  for (const student of syntheticStudents) {
+    await prisma.student.create({
+      data: {
+        matricNumber: student.matricNumber,
+        firstName: student.firstName,
+        lastName: student.lastName,
+        currentLevel: 'LEVEL_100',
+        admissionYear: 2024,
+        isActive: true,
+        departmentId: departmentHealthInformationManagement.id,
+      },
+    });
+  }
 
   console.log('✅ Created students');
   console.log('🎉 Database seeding completed successfully!');
