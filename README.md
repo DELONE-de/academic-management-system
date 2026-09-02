@@ -58,6 +58,7 @@ Required variables in `.env`:
 | `DIRECT_URL` | Yes | Direct PostgreSQL connection URL (for migrations) |
 | `JWT_SECRET` | Yes | Random secret for JWT signing |
 | `AI_PROVIDER` | No | Primary AI provider: `openrouter` (default), `gemini`, or `groq` |
+| `AI_MAX_CONCURRENCY` | No | Max simultaneous AI requests across uploads (default `3`) |
 | `OPENROUTER_API_KEY` | No* | OpenRouter API key (primary AI — Gemma 4 31B) |
 | `GEMINI_API_KEY` | No* | Google Gemini API key (fallback AI provider) |
 | `GROQ_API_KEY` | No* | Groq API key (secondary fallback AI provider) |
@@ -79,6 +80,15 @@ AI request → OpenRouter (Gemma 4 31B) → Gemini → Groq
 Fallback activates only on genuine failure (network error, timeout, 429, 5xx, malformed/unvalidatable output) — never for ordinary valid responses. Each operation records which provider actually answered (provider, model, fallback-used) in the AI audit trail. Set `AI_PROVIDER=gemini` or `AI_PROVIDER=groq` to force a different primary.
 
 **Safety rule:** AI output is never treated as academic truth. Every extraction passes through Zod schema validation → deterministic normalization → deterministic academic validation (grades, GPA, CGPA) → confidence scoring → anomaly detection → human review → approval. The deterministic academic engine remains authoritative.
+
+### Performance & Concurrency
+
+- **Bounded AI concurrency** — all AI provider calls are gated by a global semaphore (`AI_MAX_CONCURRENCY`, default `3`). A bulk upload (or several concurrent uploads) cannot fire unbounded simultaneous AI requests that exhaust provider quotas or cause timeouts.
+- **Batched validation** — the upload validation pass preloads the department, its courses, and all batch students once, eliminating per-record N+1 lookups during registration/course validation and result saving.
+- **Operation-specific timeouts** — OpenRouter uses a shorter timeout for normal structured extraction (45s) and GPA explanation (30s), and a longer one for vision/document processing (90s).
+- **Bounded retries** — provider retries are capped (2 retries with exponential backoff); permanent 4xx errors are not retried; HTTP 429 honors the `Retry-After` header before falling back to Gemini/Groq.
+- **Duplicate-processing protection** — a user cannot start a new upload while one is already in `PROCESSING` (409 response), preventing concurrent duplicate processing and provider flooding.
+- **Upload size limits** — Multer enforces a 20MB file limit and rejects unsupported MIME types early.
 
 ### 2. Install Dependencies
 
@@ -150,9 +160,7 @@ cd backend && npm test
 - `auth.test.ts` — 9 tests (login, bootstrap, registration protection, RBAC)
 - `bulk.test.ts` — 13 tests (student/course/score CRUD, authorization)
 
-## Security Practices
-
-- **JWT_SECRET** must be set — server fails to start if missing
+## Security Practices- **JWT_SECRET** must be set — server fails to start if missing
 - **Registration** is DEAN-gated — no public account creation
 - **Department endpoints** require authentication
 - **Rate limiting** on login (20/15min), registration (20/hour), global (100/min)

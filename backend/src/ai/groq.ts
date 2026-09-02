@@ -3,7 +3,15 @@
 // Handles the same structured extraction and validation loop using llama-3.3-70b
 
 import Groq from 'groq-sdk';
-import { dispatchToolCall } from './validation.tools.js';
+import {
+  dispatchToolCall,
+  validateStudent,
+  checkRegistration,
+  validateCourse,
+  saveResult,
+  loadBatchValidationContext,
+  BatchValidationContext,
+} from './validation.tools.js';
 import { ReviewItemPayload } from '../types/index.js';
 import type { ExtractionType, ExtractedStudent, ExtractedResult } from './gemini.js';
 import { extractStudentsPrompt, extractResultsPrompt, explainGPAPrompt } from './prompts.js';
@@ -74,17 +82,20 @@ export async function groqValidateWithTools(
 ): Promise<ReviewItemPayload[]> {
   const reviewItems: ReviewItemPayload[] = [];
 
+  // Load department/courses/students once to avoid N+1 lookups per record
+  const ctx: BatchValidationContext = await loadBatchValidationContext(departmentCode, records);
+
   if (type === 'students') {
     for (const record of records) {
       onProgress?.(`Validating student ${record.matricNumber}...`);
-      const result = await dispatchToolCall('validateStudent', {
+      const result = await validateStudent({
         matricNumber: record.matricNumber,
         firstName: record.firstName,
         lastName: record.lastName,
         departmentCode: record.departmentCode ?? departmentCode,
         admissionYear: record.admissionYear,
         studentLevel: record.studentLevel,
-      });
+      }, ctx);
       if (result.valid === false) {
         reviewItems.push({
           rowNumber: record.rowNumber ?? 0,
@@ -122,7 +133,7 @@ export async function groqValidateWithTools(
       const courseCodes = (courses ?? []).map((c: any) => c.courseCode);
       onProgress?.(`Checking registration: ${matricNumber}...`);
 
-      const regResult = await dispatchToolCall('checkRegistration', { matricNumber, departmentCode, courseCodes });
+      const regResult = await checkRegistration({ matricNumber, departmentCode, courseCodes }, ctx);
       if (regResult.valid === false) {
         reviewItems.push({
           rowNumber: record.rowNumber ?? 0,
@@ -137,7 +148,7 @@ export async function groqValidateWithTools(
         continue;
       }
 
-      const courseResult = await dispatchToolCall('validateCourse', { matricNumber, departmentCode, academicYear, courses });
+      const courseResult = await validateCourse({ departmentCode, academicYear, courses }, ctx);
       if (!courseResult.valid) {
         for (const ci of courseResult.courseIssues ?? []) {
           if (ci.issues.length > 0) {
@@ -156,18 +167,18 @@ export async function groqValidateWithTools(
       }
 
       onProgress?.(`Saving results: ${matricNumber}...`);
-      const saveResult = await dispatchToolCall('saveResult', { matricNumber, departmentCode, academicYear, courses });
-      if (saveResult.error) {
+      const saveResultCall = await saveResult({ matricNumber, departmentCode, academicYear, courses }, ctx);
+      if (saveResultCall.error) {
         reviewItems.push({
           rowNumber: record.rowNumber ?? 0,
           field: 'matricNumber',
           originalValue: matricNumber,
           confidence: 0.0,
           issueType: 'missing_student',
-          issueDetail: saveResult.error,
+          issueDetail: saveResultCall.error,
         });
       } else {
-        onProgress?.(`Saved ${saveResult.saved} result(s) for ${matricNumber} — GPA recalculated`);
+        onProgress?.(`Saved ${saveResultCall.saved} result(s) for ${matricNumber} — GPA recalculated`);
       }
     }
   }

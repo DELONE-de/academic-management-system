@@ -9,9 +9,16 @@
 import { ReviewItemPayload } from '../types/index.js';
 import { recordAIOperation, getAIAuditEntries } from './audit.js';
 import { PROMPT_VERSION } from './prompts.js';
+import { Semaphore } from '../utils/concurrency.js';
 import type { ExtractionType, ExtractedStudent, ExtractedResult } from './gemini.js';
 
 type ProviderName = 'openrouter' | 'gemini' | 'groq';
+
+// Bounded concurrency for all AI provider calls across uploads.
+// AI_MAX_CONCURRENCY default 3 — prevents a bulk upload from firing
+// unbounded simultaneous provider requests that exhaust quotas.
+const AI_MAX_CONCURRENCY = Math.max(1, parseInt(process.env.AI_MAX_CONCURRENCY || '3', 10) || 3);
+const aiSemaphore = new Semaphore(AI_MAX_CONCURRENCY);
 
 export interface AIOperationMeta {
   provider: string;
@@ -54,7 +61,9 @@ async function attempt<T>(
 ): Promise<{ ok: true; data: T } | { ok: false }> {
   if (!hasKey(provider)) return { ok: false };
   try {
-    const data = await fn();
+    // All provider HTTP calls are bounded by the global AI semaphore so that
+    // concurrent uploads don't fire unbounded simultaneous requests.
+    const data = await aiSemaphore.run(fn);
     return { ok: true, data };
   } catch {
     return { ok: false };

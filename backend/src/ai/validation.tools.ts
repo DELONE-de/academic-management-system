@@ -132,15 +132,18 @@ export interface ValidationResult {
   suggestions: Record<string, string>;
 }
 
-export async function validateStudent(args: {
-  matricNumber: string;
-  firstName: string;
-  lastName: string;
-  departmentCode: string;
-  admissionYear: number;
-  studentLevel: string;
-  email?: string;
-}): Promise<ValidationResult> {
+export async function validateStudent(
+  args: {
+    matricNumber: string;
+    firstName: string;
+    lastName: string;
+    departmentCode: string;
+    admissionYear: number;
+    studentLevel: string;
+    email?: string;
+  },
+  ctx?: BatchValidationContext
+): Promise<ValidationResult> {
   const issues: string[] = [];
   const suggestions: Record<string, string> = {};
 
@@ -157,22 +160,30 @@ export async function validateStudent(args: {
   });
   issues.push(...rowErrors);
 
-  // Department exists check
-  const department = await prisma.department.findUnique({
-    where: { code: args.departmentCode.toUpperCase() },
-    select: { id: true },
-  });
-  if (!department) {
+  // Department exists check — use preloaded context when available
+  let departmentExists = ctx ? !!ctx.departmentId : false;
+  if (!ctx) {
+    const department = await prisma.department.findUnique({
+      where: { code: args.departmentCode.toUpperCase() },
+      select: { id: true },
+    });
+    departmentExists = !!department;
+  }
+  if (!departmentExists) {
     issues.push(`Department '${args.departmentCode}' not found`);
     suggestions['departmentCode'] = 'Check the department code against the list of registered departments';
   }
 
-  // Duplicate matric check
-  const existing = await prisma.student.findUnique({
-    where: { matricNumber: args.matricNumber.toUpperCase() },
-    select: { id: true },
-  });
-  if (existing) {
+  // Duplicate matric check — use preloaded context when available
+  let studentExists = ctx ? ctx.studentMap.has(args.matricNumber.toUpperCase()) : false;
+  if (!ctx) {
+    const existing = await prisma.student.findUnique({
+      where: { matricNumber: args.matricNumber.toUpperCase() },
+      select: { id: true },
+    });
+    studentExists = !!existing;
+  }
+  if (studentExists) {
     issues.push(`Student '${args.matricNumber}' already exists in the database`);
     suggestions['matricNumber'] = 'This student is already registered — skip or update instead';
   }
@@ -189,19 +200,38 @@ export interface CourseValidationIssue {
   confidence: number;
 }
 
-export async function validateCourse(args: {
-  departmentCode: string;
-  academicYear: string;
-  courses: Array<{ courseCode: string; score: number }>;
-}): Promise<{ valid: boolean; courseIssues: CourseValidationIssue[] }> {
+export async function validateCourse(
+  args: {
+    departmentCode: string;
+    academicYear: string;
+    courses: Array<{ courseCode: string; score: number }>;
+  },
+  ctx?: BatchValidationContext
+): Promise<{ valid: boolean; courseIssues: CourseValidationIssue[] }> {
   const courseIssues: CourseValidationIssue[] = [];
 
-  const department = await prisma.department.findUnique({
-    where: { code: args.departmentCode.toUpperCase() },
-    select: { id: true },
-  });
+  let departmentId: string | null;
+  const courseMap = new Map<string, any>();
 
-  if (!department) {
+  if (ctx) {
+    departmentId = ctx.departmentId;
+    ctx.courseMap.forEach((v, k) => courseMap.set(k, v));
+  } else {
+    const department = await prisma.department.findUnique({
+      where: { code: args.departmentCode.toUpperCase() },
+      select: { id: true },
+    });
+    departmentId = department?.id ?? null;
+    if (departmentId) {
+      const dbCourses = await prisma.course.findMany({
+        where: { departmentId },
+        select: { code: true },
+      });
+      for (const c of dbCourses) courseMap.set(c.code.toUpperCase(), c);
+    }
+  }
+
+  if (!departmentId) {
     return {
       valid: false,
       courseIssues: args.courses.map((c) => ({
@@ -214,18 +244,10 @@ export async function validateCourse(args: {
     };
   }
 
-  // Fetch all courses for this department in one query
-  const dbCourses = await prisma.course.findMany({
-    where: { departmentId: department.id },
-    select: { code: true },
-  });
-  const dbCourseCodes = new Set(dbCourses.map((c) => c.code.toUpperCase()));
-
   for (const c of args.courses) {
     const issues: string[] = [];
     const suggestions: Record<string, string> = {};
 
-    // Score range
     const scoreErrors = validateScoreRow({
       matricNumber: 'PLACEHOLDER',
       courseCode: c.courseCode,
@@ -235,8 +257,7 @@ export async function validateCourse(args: {
     });
     issues.push(...scoreErrors.filter((e) => !e.includes('Matric')));
 
-    // Course exists
-    if (!dbCourseCodes.has(c.courseCode.toUpperCase())) {
+    if (!courseMap.has(c.courseCode.toUpperCase())) {
       issues.push(`Course '${c.courseCode}' not found in department '${args.departmentCode}'`);
       suggestions['courseCode'] = 'Verify the course code matches what is registered for this department';
     }
@@ -256,15 +277,30 @@ export async function validateCourse(args: {
   };
 }
 
-export async function checkRegistration(args: {
-  matricNumber: string;
-  departmentCode: string;
-  courseCodes: string[];
-}): Promise<ValidationResult> {
+export async function checkRegistration(
+  args: {
+    matricNumber: string;
+    departmentCode: string;
+    courseCodes: string[];
+  },
+  ctx?: BatchValidationContext
+): Promise<ValidationResult> {
   const issues: string[] = [];
   const suggestions: Record<string, string> = {};
 
-  const student = await resolveStudent(args.matricNumber, args.departmentCode);
+  let student: { id: string; departmentId: string; departmentCode: string } | null = null;
+  if (ctx) {
+    student = ctx.studentMap.get(args.matricNumber.toUpperCase()) ?? null;
+  } else {
+    const resolved = await resolveStudent(args.matricNumber, args.departmentCode);
+    if (resolved) {
+      student = {
+        id: resolved.id,
+        departmentId: resolved.departmentId,
+        departmentCode: resolved.department.code,
+      };
+    }
+  }
 
   if (!student) {
     issues.push(`Student '${args.matricNumber}' not found`);
@@ -272,22 +308,29 @@ export async function checkRegistration(args: {
     return { valid: false, confidence: 0.0, issues, suggestions };
   }
 
-  if (student.department.code.toUpperCase() !== args.departmentCode.toUpperCase()) {
+  if (student.departmentCode.toUpperCase() !== args.departmentCode.toUpperCase()) {
     issues.push(
-      `Student '${args.matricNumber}' belongs to '${student.department.code}', not '${args.departmentCode}'`
+      `Student '${args.matricNumber}' belongs to '${student.departmentCode}', not '${args.departmentCode}'`
     );
-    suggestions['departmentCode'] = `Use department code '${student.department.code}'`;
+    suggestions['departmentCode'] = `Use department code '${student.departmentCode}'`;
   }
 
-  // Check all courses in one query
-  const dbCourses = await prisma.course.findMany({
-    where: {
-      departmentId: student.departmentId,
-      code: { in: args.courseCodes.map((c) => c.toUpperCase()) },
-    },
-    select: { code: true },
-  });
-  const foundCodes = new Set(dbCourses.map((c) => c.code.toUpperCase()));
+  // Check all courses — use preloaded context when available (avoids N+1)
+  let foundCodes = new Set<string>();
+  if (ctx) {
+    for (const code of args.courseCodes) {
+      if (ctx.courseMap.has(code.toUpperCase())) foundCodes.add(code.toUpperCase());
+    }
+  } else {
+    const dbCourses = await prisma.course.findMany({
+      where: {
+        departmentId: student.departmentId,
+        code: { in: args.courseCodes.map((c) => c.toUpperCase()) },
+      },
+      select: { code: true },
+    });
+    foundCodes = new Set(dbCourses.map((c) => c.code.toUpperCase()));
+  }
 
   for (const code of args.courseCodes) {
     if (!foundCodes.has(code.toUpperCase())) {
@@ -325,30 +368,57 @@ export async function findDuplicateStudents(args: {
   return { duplicatesInBatch, duplicatesInDb };
 }
 
-export async function saveResult(args: {
-  matricNumber: string;
-  departmentCode: string;
-  academicYear: string;
-  courses: Array<{ courseCode: string; score: number }>;
-}): Promise<{ saved: number; skipped: number; gpaRecalculated: boolean; error?: string }> {
-  const resolved = await resolveStudent(args.matricNumber, args.departmentCode);
-  if (!resolved) return { saved: 0, skipped: 0, gpaRecalculated: false, error: `Student '${args.matricNumber}' not found in department '${args.departmentCode}'` };
+export async function saveResult(
+  args: {
+    matricNumber: string;
+    departmentCode: string;
+    academicYear: string;
+    courses: Array<{ courseCode: string; score: number }>;
+  },
+  ctx?: BatchValidationContext
+): Promise<{ saved: number; skipped: number; gpaRecalculated: boolean; error?: string }> {
+  let studentId: string;
+  let passMark: number;
 
-  const student = await prisma.student.findUnique({
-    where: { id: resolved.id },
-    select: { id: true, departmentId: true, department: { select: { passMark: true } } },
-  });
+  if (ctx) {
+    const student = ctx.studentMap.get(args.matricNumber.toUpperCase());
+    if (!student) return { saved: 0, skipped: 0, gpaRecalculated: false, error: `Student '${args.matricNumber}' not found in department '${args.departmentCode}'` };
+    if (student.departmentCode.toUpperCase() !== args.departmentCode.toUpperCase()) {
+      return { saved: 0, skipped: 0, gpaRecalculated: false, error: `Student '${args.matricNumber}' not found in department '${args.departmentCode}'` };
+    }
+    studentId = student.id;
+    passMark = ctx.passMark ?? 40;
+  } else {
+    const resolved = await resolveStudent(args.matricNumber, args.departmentCode);
+    if (!resolved) return { saved: 0, skipped: 0, gpaRecalculated: false, error: `Student '${args.matricNumber}' not found in department '${args.departmentCode}'` };
 
-  if (!student) return { saved: 0, skipped: 0, gpaRecalculated: false, error: `Student '${args.matricNumber}' not found` };
+    const student = await prisma.student.findUnique({
+      where: { id: resolved.id },
+      select: { id: true, departmentId: true, department: { select: { passMark: true } } },
+    });
+    if (!student) return { saved: 0, skipped: 0, gpaRecalculated: false, error: `Student '${args.matricNumber}' not found` };
+    studentId = student.id;
+    passMark = student.department.passMark;
+  }
 
-  const courses = await prisma.course.findMany({
-    where: {
-      departmentId: student.departmentId,
-      code: { in: args.courses.map((c) => c.courseCode.toUpperCase()) },
-    },
-    select: { id: true, code: true, unit: true, level: true, semester: true },
-  });
-  const courseMap = new Map(courses.map((c) => [c.code.toUpperCase(), c]));
+  // Build course map from context if available, otherwise query once
+  let courseMap: Map<string, any>;
+  if (ctx) {
+    courseMap = new Map(ctx.courseMap);
+  } else {
+    const studentDept = await prisma.student.findUnique({
+      where: { id: studentId },
+      select: { departmentId: true },
+    });
+    const courses = await prisma.course.findMany({
+      where: {
+        departmentId: studentDept!.departmentId,
+        code: { in: args.courses.map((c) => c.courseCode.toUpperCase()) },
+      },
+      select: { id: true, code: true, unit: true, level: true, semester: true },
+    });
+    courseMap = new Map(courses.map((c) => [c.code.toUpperCase(), c]));
+  }
 
   let saved = 0;
   let skipped = 0;
@@ -361,12 +431,12 @@ export async function saveResult(args: {
       const course = courseMap.get(c.courseCode.toUpperCase());
       if (!course) { skipped++; continue; }
 
-      const calc = calculateResult(c.score, course.unit, student.department.passMark);
+      const calc = calculateResult(c.score, course.unit, passMark);
 
       await tx.result.upsert({
-        where: { studentId_courseId_academicYear: { studentId: student.id, courseId: course.id, academicYear: args.academicYear } },
+        where: { studentId_courseId_academicYear: { studentId, courseId: course.id, academicYear: args.academicYear } },
         create: {
-          studentId: student.id,
+          studentId,
           courseId: course.id,
           score: c.score,
           grade: calc.grade,
@@ -419,6 +489,60 @@ async function resolveStudent(matricNumber: string, departmentCode?: string) {
   }
 
   return student;
+}
+
+// ============================================================
+// BATCH VALIDATION CONTEXT
+// Preloads department, courses, and students once for a batch so that
+// per-record validation does not issue repeated DB lookups (N+1).
+// ============================================================
+
+export interface BatchValidationContext {
+  departmentId: string | null;
+  passMark: number | null;
+  courseMap: Map<string, { id: string; code: string; unit: number; level: string; semester: string }>;
+  studentMap: Map<string, { id: string; departmentId: string; departmentCode: string }>;
+}
+
+export async function loadBatchValidationContext(
+  departmentCode: string,
+  records: any[]
+): Promise<BatchValidationContext> {
+  const department = await prisma.department.findUnique({
+    where: { code: departmentCode.toUpperCase() },
+    select: { id: true, passMark: true },
+  });
+  const departmentId = department?.id ?? null;
+  const passMark = department?.passMark ?? null;
+
+  const courseMap = new Map<string, { id: string; code: string; unit: number; level: string; semester: string }>();
+  if (departmentId) {
+    const courses = await prisma.course.findMany({
+      where: { departmentId },
+      select: { id: true, code: true, unit: true, level: true, semester: true },
+    });
+    for (const c of courses) courseMap.set(c.code.toUpperCase(), c);
+  }
+
+  const matrics = [...new Set(
+    records.map((r: any) => (r.matricNumber || '').toUpperCase()).filter(Boolean)
+  )];
+  const studentMap = new Map<string, { id: string; departmentId: string; departmentCode: string }>();
+  if (matrics.length > 0) {
+    const students = await prisma.student.findMany({
+      where: { matricNumber: { in: matrics } },
+      select: { id: true, departmentId: true, matricNumber: true, department: { select: { code: true } } },
+    });
+    for (const s of students) {
+      studentMap.set(s.matricNumber.toUpperCase(), {
+        id: s.id,
+        departmentId: s.departmentId,
+        departmentCode: s.department.code,
+      });
+    }
+  }
+
+  return { departmentId, passMark, courseMap, studentMap };
 }
 
 // Dispatcher — called by upload service when Gemini returns a function call

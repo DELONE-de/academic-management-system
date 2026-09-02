@@ -28,6 +28,25 @@ router.post(
       return;
     }
 
+    // Duplicate-processing protection: prevent the same user from running
+    // multiple concurrent uploads that could exhaust AI quotas or overwhelm
+    // the database. Reject new uploads while one is already PROCESSING.
+    const activeJob = await prisma.uploadJob.findFirst({
+      where: { uploadedById: req.user!.id, status: 'PROCESSING' },
+      select: { id: true, fileName: true, createdAt: true },
+    });
+    if (activeJob) {
+      const elapsed = Date.now() - new Date(activeJob.createdAt).getTime();
+      if (elapsed < 10 * 60 * 1000) {
+        res.status(409).json({
+          success: false,
+          message: 'You already have an upload being processed. Please wait for it to finish before uploading another file.',
+          data: { jobId: activeJob.id, fileName: activeJob.fileName },
+        });
+        return;
+      }
+    }
+
     const uploadType = (req.body.uploadType as 'students' | 'results') || 'results';
     const departmentId = req.body.departmentId || req.user!.departmentId;
     const academicYear = req.body.academicYear as string | undefined;

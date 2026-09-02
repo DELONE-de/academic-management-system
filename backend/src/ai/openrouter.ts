@@ -23,6 +23,13 @@ const REQUEST_TIMEOUT_MS = 60_000;
 const MAX_RETRIES = 2;
 const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
 
+// Operation-specific timeouts (ms) — allow shorter/longer per task type.
+export const OPERATION_TIMEOUTS = {
+  extraction: 45_000,   // normal structured extraction
+  vision: 90_000,       // vision/document processing can be slower
+  explanation: 30_000,  // simple GPA explanation
+} as const;
+
 export class OpenRouterError extends Error {
   constructor(
     message: string,
@@ -44,6 +51,7 @@ interface OpenRouterRequestOptions {
   jsonMode?: boolean;
   maxTokens?: number;
   images?: Array<{ base64: string; mimeType: string }>;
+  timeoutMs?: number;
 }
 
 /**
@@ -81,7 +89,8 @@ async function openRouterRequest(
 
   while (attempt <= MAX_RETRIES) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS;
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
         method: 'POST',
@@ -119,12 +128,26 @@ async function openRouterRequest(
       lastError = new OpenRouterError(message, response.status, retryable);
 
       if (!retryable) throw lastError; // 4xx (except 429) — do not retry
+
+      // Honor Retry-After header for 429 rate limits
+      if (response.status === 429) {
+        const retryAfter = response.headers.get('Retry-After');
+        if (retryAfter) {
+          const seconds = parseInt(retryAfter, 10);
+          if (!isNaN(seconds) && seconds > 0 && seconds <= 120) {
+            await sleep(seconds * 1000);
+            // We already slept, skip the default backoff below.
+            attempt++;
+            if (attempt <= MAX_RETRIES) continue;
+          }
+        }
+      }
     } catch (err: any) {
       if (err instanceof OpenRouterError) {
         if (!err.retryable) throw err;
         lastError = err;
       } else if (err?.name === 'AbortError') {
-        lastError = new OpenRouterError(`OpenRouter request timed out after ${REQUEST_TIMEOUT_MS}ms`, undefined, true);
+        lastError = new OpenRouterError(`OpenRouter request timed out after ${options.timeoutMs ?? REQUEST_TIMEOUT_MS}ms`, undefined, true);
       } else {
         lastError = new OpenRouterError(`OpenRouter network error: ${err?.message || String(err)}`, undefined, true);
       }
@@ -186,6 +209,7 @@ export async function openrouterVisionExtract(base64: string, mimeType: string):
     const text = await openRouterRequest(visionExtractPrompt(), 'Extract the document content.', {
       images: [{ base64, mimeType }],
       maxTokens: 4096,
+      timeoutMs: OPERATION_TIMEOUTS.vision,
     });
     record('extraction', 'PRIMARY_SUCCESS', Date.now() - start);
     return text;
@@ -207,7 +231,7 @@ export async function openrouterExtractStudents(content: string): Promise<Extrac
     const raw = await openRouterRequest(
       'You extract student records into strict JSON. Output ONLY a JSON array, no markdown, no prose.',
       extractStudentsPrompt(content),
-      { jsonMode: true, temperature: 0.1 }
+      { jsonMode: true, temperature: 0.1, timeoutMs: OPERATION_TIMEOUTS.extraction }
     );
     const parsed = extractJson(raw);
     const validation = validateExtractedStudents(parsed);
@@ -239,7 +263,7 @@ export async function openrouterExtractResults(content: string, academicYear: st
     const raw = await openRouterRequest(
       'You extract student score records into strict JSON. Output ONLY a JSON array, no markdown, no prose.',
       extractResultsPrompt(content, academicYear),
-      { jsonMode: true, temperature: 0.1 }
+      { jsonMode: true, temperature: 0.1, timeoutMs: OPERATION_TIMEOUTS.extraction }
     );
     const parsed = extractJson(raw);
     const validation = validateExtractedResults(parsed);
@@ -293,7 +317,7 @@ export async function openrouterExplainGPA(data: {
     const text = await openRouterRequest(
       'You are an academic advisor. Explain the GPA clearly using ONLY the provided verified data. Never invent academic facts.',
       explainGPAPrompt(data),
-      { temperature: 0.3 }
+      { temperature: 0.3, timeoutMs: OPERATION_TIMEOUTS.explanation }
     );
     record('explanation', 'PRIMARY_SUCCESS', Date.now() - start);
     return text;

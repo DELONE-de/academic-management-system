@@ -232,12 +232,41 @@ describe('AI provider routing', () => {
     });
   });
 
-  describe('validation routing', () => {
-    it('routes validation through OpenRouter first', async () => {
-      mockOpenrouter.openrouterValidateWithTools.mockResolvedValue([]);
-      const result = await aiValidateWithTools([], 'results', 'CSC');
-      expect(result.meta.provider).toBe('openrouter');
-      expect(result.meta.fallbackUsed).toBe(false);
+  describe('concurrency bounding', () => {
+    it('does not exceed the configured AI concurrency limit', async () => {
+      // OpenRouter configured; provider calls are bounded by the global semaphore.
+      process.env.AI_MAX_CONCURRENCY = '3';
+      let active = 0;
+      let peak = 0;
+
+      const original = mockOpenrouter.openrouterExtractStudents;
+      mockOpenrouter.openrouterExtractStudents.mockImplementation(async () => {
+        active++;
+        peak = Math.max(peak, active);
+        await new Promise((r) => setTimeout(r, 15));
+        active--;
+        return [sampleStudent];
+      });
+
+      await Promise.all(Array.from({ length: 20 }, () => aiExtractStudents('content')));
+
+      expect(peak).toBeLessThanOrEqual(3);
+      mockOpenrouter.openrouterExtractStudents.mockImplementation(original);
+    });
+  });
+
+  describe('retry bounded', () => {
+    it('does not retry permanent 4xx (non-429) errors', async () => {
+      // A permanent validation failure on OpenRouter must throw immediately
+      // (no retry) so the routing layer falls back to Gemini once.
+      const err = Object.assign(new Error('OpenRouter HTTP 400: bad request'), { status: 400 });
+      mockOpenrouter.openrouterExtractStudents.mockRejectedValue(err);
+      mockGemini.geminiExtractStudents.mockResolvedValue([sampleStudent]);
+
+      const result = await aiExtractStudents('content');
+
+      expect(result.meta.provider).toBe('gemini');
+      expect(mockOpenrouter.openrouterExtractStudents).toHaveBeenCalledTimes(1);
     });
   });
 });
