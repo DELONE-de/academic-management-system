@@ -128,7 +128,8 @@ describe('CSRF protection', () => {
       data: { email: uniqueEmail('bearer'), password: pw, firstName: 'Beth', lastName: 'Ebo', role: 'HOD', departmentId: testDept.id },
     });
     const loginRes = await request(app).post('/api/auth/login').send({ email: user.email, password: 'Bearer@12345' });
-    const token = loginRes.body.data.token;
+    // Token is no longer in the response body — read it from the auth cookie
+    const token = extractCookie(loginRes, 'acadmind_token') || '';
 
     const res = await request(app)
       .post('/api/students')

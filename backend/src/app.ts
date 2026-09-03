@@ -57,22 +57,23 @@ app.use(helmet());
 // Request correlation ID + structured logging
 app.use(requestCorrelation);
 
-// CORS configuration
+// CORS configuration — explicit origins only (no wildcard patterns).
+// FRONTEND_URL is a comma-separated list of the exact allowed origins
+// (e.g. the Vercel production/preview URLs). localhost is allowed in
+// non-production for local development.
 const allowedOrigins = process.env.FRONTEND_URL
-  ? process.env.FRONTEND_URL.split(',').map((o) => o.trim()).filter(Boolean)
-  : ['http://localhost:3000'];
+  ? process.env.FRONTEND_URL.split(',').map((o) => o.trim().replace(/\/$/, '')).filter(Boolean)
+  : [];
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no Origin (e.g. same-origin / curl)
+      // Allow requests with no Origin (e.g. same-origin / curl / integration tests)
       if (!origin) return callback(null, true);
-      const isAllowed =
-        allowedOrigins.includes(origin) ||
-        /\.vercel\.app$/.test(origin) ||
-        /\.onrender\.com$/.test(origin) ||
-        origin === 'http://localhost:3000';
-      if (isAllowed) return callback(null, true);
+      const devOrigins = process.env.NODE_ENV === 'production' ? [] : ['http://localhost:3000'];
+      if (allowedOrigins.includes(origin) || devOrigins.includes(origin)) {
+        return callback(null, true);
+      }
       callback(new Error(`CORS: origin ${origin} not allowed`));
     },
     credentials: true,

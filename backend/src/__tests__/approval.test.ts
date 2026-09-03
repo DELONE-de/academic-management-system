@@ -10,6 +10,13 @@ let counter = 0;
 const uniqueEmail = (p: string) => `${p}.${++counter}.${Date.now()}@test.com`;
 const uniqueCode = (p: string) => `${p}${++counter}`;
 
+/** Extract the auth JWT from a login response's Set-Cookie header. */
+function tokenFrom(res: request.Response): string {
+  const setCookie = (res.headers['set-cookie'] || []) as unknown as string[];
+  const cookie = (Array.isArray(setCookie) ? setCookie : [setCookie])
+    .find((c: string) => c.startsWith('acadmind_token='));
+  return cookie ? cookie.split(';')[0].split('=').slice(1).join('=') : '';
+}
 let dept: any, faculty: any;
 let hodToken: string, deanToken: string, examToken: string;
 let batchId: string;
@@ -38,11 +45,11 @@ beforeAll(async () => {
   const exam = await prisma.user.create({ data: { email: uniqueEmail('exam'), password: pw, firstName: 'E', lastName: 'O', role: 'EXAMINATION_OFFICER', departmentId: dept.id } });
 
   const lh = await request(app).post('/api/auth/login').send({ email: hod.email, password: 'User@12345' });
-  hodToken = lh.body.data.token;
+  hodToken = tokenFrom(lh);
   const ld = await request(app).post('/api/auth/login').send({ email: dean.email, password: 'User@12345' });
-  deanToken = ld.body.data.token;
+  deanToken = tokenFrom(ld);
   const le = await request(app).post('/api/auth/login').send({ email: exam.email, password: 'User@12345' });
-  examToken = le.body.data.token;
+  examToken = tokenFrom(le);
 });
 
 afterAll(async () => {
@@ -159,7 +166,7 @@ describe('Approval workflow', () => {
     expect(gpaBefore).toBeNull();
     // Create and approve a batch, then publish
     const loginRes = await request(app).post('/api/auth/login').send({ email: hod.email, password: 'Life@12345' });
-    const token = loginRes.body.data.token;
+    const token = tokenFrom(loginRes);
     const batch = await prisma.resultBatch.create({
       data: { departmentId: dept.id, level: 'LEVEL_100', semester: 'FIRST', academicYear: '2024/2025', status: 'APPROVED_BY_HOD', submittedById: hod.id },
     });

@@ -8,11 +8,12 @@
 import { Request, Response, NextFunction } from 'express';
 import { randomUUID } from 'crypto';
 import { sendForbidden } from '../utils/response.js';
+import { AUTH_COOKIE_NAME, CSRF_COOKIE_NAME } from '../config/cookies.js';
 
-const CSRF_COOKIE = 'csrf-token';
+const CSRF_COOKIE = CSRF_COOKIE_NAME;
 const CSRF_HEADER = 'x-csrf-token';
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
-const AUTH_COOKIE = 'acadmind_token';
+const AUTH_COOKIE = AUTH_COOKIE_NAME;
 
 const CSRF_EXEMPT_PATHS = new Set([
   '/api/auth/login',
@@ -71,7 +72,7 @@ function setCsrfCookie(res: Response, token: string): void {
     secure: isProduction,
     // None in production so the cookie is sent on cross-origin (Vercel→Render)
     // credentialed requests; Lax in development (same-site localhost).
-    sameSite: isProduction ? 'none' : 'lax',
+    sameSite: isProduction ? ('none' as const) : ('lax' as const),
     path: '/',
   });
 }

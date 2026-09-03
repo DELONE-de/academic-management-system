@@ -20,9 +20,14 @@ export default function BootstrapPage() {
   const [faculties, setFaculties] = useState<any[]>([]);
 
   useEffect(() => {
-    // Check if system already has users
+    // Check if system already has users.
+    // NOTE: the API wraps payloads as { success, message, data: {...} } — read
+    // r.data.data.bootstrapped, NOT r.data.bootstrapped. Reading the wrong
+    // shape made `b` always truthy and redirected every fresh visit to
+    // /signup straight to /login.
     api.get('/auth/bootstrap-status').then((r: any) => {
-      const b = r.data?.bootstrapped ?? true;
+      const payload = r.data?.data ?? r.data;
+      const b = payload?.bootstrapped ?? false;
       setBootstrapped(b);
       if (b) {
         router.push('/login');
@@ -35,13 +40,14 @@ export default function BootstrapPage() {
       setBootstrapped(false);
     });
 
-    // Fetch faculties for bootstrap form
+    // Fetch faculties for bootstrap form (payload is wrapped: { data: [...] })
     api.get('/departments/public').then((r: any) => {
-      if (r.data) {
+      const departments = r.data?.data ?? r.data;
+      if (Array.isArray(departments)) {
         const uniqueFaculties = Array.from(
           new Map(
-            r.data
-              ?.filter((d: any) => d.faculty)
+            departments
+              .filter((d: any) => d.faculty)
               .map((d: any) => [d.faculty.id, d.faculty])
           ).values()
         );

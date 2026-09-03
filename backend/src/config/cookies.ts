@@ -3,6 +3,14 @@
 
 export const AUTH_COOKIE_NAME = 'acadmind_token';
 
+/**
+ * CSRF token cookie. Non-HttpOnly is intentional: the frontend reads it via
+ * document.cookie on same-origin (dev) setups and echoes it back in the
+ * X-CSRF-Token header (double-submit). Cross-origin deployments instead read
+ * the X-CSRF-Token response header, which the csrf middleware also sets.
+ */
+export const CSRF_COOKIE_NAME = 'csrf-token';
+
 const isProduction = process.env.NODE_ENV === 'production';
 
 // SameSite for a cross-origin deployment (Vercel frontend → Render backend):
@@ -55,4 +63,19 @@ export function authCookieOptions(maxAgeMs?: number): {
     maxAge: maxAgeMs ?? getTokenMaxAgeMs(),
     path: '/',
   };
+}
+
+/**
+ * Options for clearing the authentication cookie. Must match the options used
+ * when setting it (name/path/sameSite/secure) — a mismatch is the classic
+ * cause of "stale cookie survives logout" bugs.
+ */
+export function authCookieClearOptions(): {
+  httpOnly: boolean;
+  secure: boolean;
+  sameSite: 'lax' | 'none';
+  path: string;
+} {
+  const { maxAge: _maxAge, ...clear } = authCookieOptions(0);
+  return clear;
 }

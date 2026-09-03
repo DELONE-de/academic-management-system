@@ -6,7 +6,6 @@ import request from 'supertest';
 import app from '../app.js';
 import { prisma } from '../config/database.js';
 import bcrypt from 'bcryptjs';
-
 let counter = 0;
 const uniqueEmail = (p: string) => `${p}.${++counter}.${Date.now()}@test.com`;
 const uniqueCode = (p: string) => `${p}${++counter}`;
@@ -53,7 +52,10 @@ beforeAll(async () => {
   });
 
   const loginRes = await request(app).post('/api/auth/login').send({ email: hod.email, password: 'Hod@12345' });
-  authToken = loginRes.body.data.token;
+  const setCookie = (loginRes.headers['set-cookie'] || []) as unknown as string[];
+  const authCookie = (Array.isArray(setCookie) ? setCookie : [setCookie])
+    .find((c: string) => c.startsWith('acadmind_token='));
+  authToken = authCookie ? authCookie.split(';')[0].split('=').slice(1).join('=') : '';
 });
 
 afterAll(async () => {

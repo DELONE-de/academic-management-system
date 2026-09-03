@@ -199,7 +199,9 @@ async function login(email: string, password = PW): Promise<{ token: string; coo
   const setCookies: string[] = (res.headers['set-cookie'] as any) || [];
   const cookieHeader = setCookies.map((c) => c.split(';')[0]).join('; ');
   const csrf = /csrf-token=([^;]+)/.exec(cookieHeader)?.[1] ?? null;
-  return { token: res.body?.data?.token, cookieHeader, csrf };
+  // Token is delivered via Set-Cookie only — never in the response body.
+  const token = /acadmind_token=([^;]+)/.exec(cookieHeader)?.[1] ?? '';
+  return { token, cookieHeader, csrf };
 }
 
 const dean = await login('dean@test.local');
@@ -226,10 +228,16 @@ await t('POST /api/auth/login (wrong password → 401)', 401, () =>
 await t('POST /api/auth/login (invalid body → 400)', 400, () =>
   request(app).post('/api/auth/login').send({ email: 'not-an-email' })
 );
-await t('POST /api/auth/login (valid → 200 + cookie)', 200, async () => {
+await t('POST /api/auth/login (valid → 200 + cookie, NO token in body)', 200, async () => {
   const res = await request(app).post('/api/auth/login').send({ email: 'hod@test.local', password: PW });
   assert('login sets HttpOnly auth cookie', /acadmind_token=/.test(res.headers['set-cookie']?.join(';') || ''));
-  assert('login returns token in body', !!res.body?.data?.token);
+  assert('login does NOT leak token in body', !JSON.stringify(res.body).includes('eyJ'));
+  assert('login returns user data in body', !!res.body?.data?.user);
+  return res;
+});
+await t('GET  /api/auth/csrf (issues X-CSRF-Token header → 200)', 200, async () => {
+  const res = await request(app).get('/api/auth/csrf');
+  assert('csrf endpoint sets X-CSRF-Token header', !!res.headers['x-csrf-token']);
   return res;
 });
 

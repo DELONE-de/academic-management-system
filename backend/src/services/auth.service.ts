@@ -67,9 +67,22 @@ export class AuthService {
 
   /**
    * Returns whether the system has been bootstrapped (has at least one user).
+   * Must never fail on an empty/first-run database: it feeds the frontend's
+   * signup redirect logic. If the users table does not exist yet (migrations
+   * not applied), report "not bootstrapped" instead of erroring.
    */
   async getBootstrapStatus(): Promise<{ bootstrapped: boolean; userCount: number }> {
-    const userCount = await prisma.user.count();
+    let userCount: number;
+    try {
+      userCount = await prisma.user.count();
+    } catch (error: any) {
+      // Prisma P2021 "table does not exist" / P2022 "column does not exist" —
+      // a first-run database before `prisma migrate deploy`. Not bootstrapped.
+      if (error?.code === 'P2021' || error?.code === 'P2022') {
+        return { bootstrapped: false, userCount: 0 };
+      }
+      throw error;
+    }
     return { bootstrapped: userCount > 0, userCount };
   }
 

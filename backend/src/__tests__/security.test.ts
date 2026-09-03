@@ -10,6 +10,14 @@ let counter = 0;
 const uniqueEmail = (p: string) => `${p}.${++counter}.${Date.now()}@test.com`;
 const uniqueCode = (p: string) => `${p}${++counter}`;
 
+/** Extract the auth JWT from a login response's Set-Cookie header. */
+function tokenFrom(res: request.Response): string {
+  const setCookie = (res.headers['set-cookie'] || []) as unknown as string[];
+  const cookie = (Array.isArray(setCookie) ? setCookie : [setCookie])
+    .find((c: string) => c.startsWith('acadmind_token='));
+  return cookie ? cookie.split(';')[0].split('=').slice(1).join('=') : '';
+}
+
 let deptA: any, deptB: any, facultyA: any, facultyB: any;
 let hodAToken: string, hodBToken: string, deanToken: string;
 let studentA: any, studentB: any, uploadJobA: any;
@@ -49,11 +57,11 @@ beforeAll(async () => {
   });
 
   const loginA = await request(app).post('/api/auth/login').send({ email: hodA.email, password: 'Hod@12345' });
-  hodAToken = loginA.body.data.token;
+  hodAToken = tokenFrom(loginA);
   const loginB = await request(app).post('/api/auth/login').send({ email: hodB.email, password: 'Hod@12345' });
-  hodBToken = loginB.body.data.token;
+  hodBToken = tokenFrom(loginB);
   const loginDean = await request(app).post('/api/auth/login').send({ email: deanA.email, password: 'Hod@12345' });
-  deanToken = loginDean.body.data.token;
+  deanToken = tokenFrom(loginDean);
 });
 
 afterAll(async () => {

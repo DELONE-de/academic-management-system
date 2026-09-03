@@ -217,7 +217,6 @@ CGPA = Σ(totalPoints across all semesters) / Σ(totalUnits across all semesters
 
 ### Known Limitations
 
-- JWT stored in `localStorage` (frontend) — vulnerable to XSS. Cookie-based auth in progress.
 - Results written before human approval — AI pipeline persists during validation, not after approval.
 - No email verification or password reset flow.
 - In-memory file uploads — OOM risk at scale. Use external storage (Supabase/S3) for production.

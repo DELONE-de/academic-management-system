@@ -6,11 +6,23 @@ import request from 'supertest';
 import app from '../app.js';
 import { prisma } from '../config/database.js';
 import bcrypt from 'bcryptjs';
+import { AUTH_COOKIE_NAME } from '../config/cookies.js';
 
 let counter = 0;
 const unique = (p: string) => `${p}_${++counter}_${Date.now()}`;
 const uniqueEmail = (p: string) => `${p.replace('@', '.')}.${++counter}.${Date.now()}@test.com`;
 const uniqueCode = (p: string) => `${p}${++counter}${Date.now().toString().slice(-4)}`;
+
+/**
+ * Extract the JWT from the login response's Set-Cookie header.
+ * The token is deliberately NOT in the response body (never readable by JS).
+ */
+function tokenFrom(res: request.Response): string {
+  const setCookie = (res.headers['set-cookie'] || []) as unknown as string[];
+  const cookie = (Array.isArray(setCookie) ? setCookie : [setCookie])
+    .find((c: string) => c.startsWith(`${AUTH_COOKIE_NAME}=`));
+  return cookie ? cookie.split(';')[0].split('=').slice(1).join('=') : '';
+}
 
 let deanToken: string;
 let testFaculty: any;
@@ -44,10 +56,10 @@ beforeAll(async () => {
     data: { email: uniqueEmail('dean'), password: pw, firstName: 'Dean', lastName: 'Admin', role: 'DEAN', facultyId: testFaculty.id },
   });
 
-  // Login as DEAN to get token
+  // Login as DEAN to get token (from Set-Cookie — token is not in the body)
   const loginRes = await request(app).post('/api/auth/login').send({ email: deanUser.email, password: 'Dean@12345' });
   if (loginRes.status === 200 && loginRes.body.data) {
-    deanToken = loginRes.body.data.token;
+    deanToken = tokenFrom(loginRes);
   } else {
     console.warn('Login failed in beforeAll:', loginRes.status, JSON.stringify(loginRes.body));
     deanToken = '';
@@ -90,14 +102,17 @@ describe('Auth API', () => {
   });
 
   describe('Login', () => {
-    it('accepts valid credentials', async () => {
+    it('accepts valid credentials and does NOT leak the token in the body', async () => {
       const pw = await bcrypt.hash('Login@12345', 4);
       const u = await prisma.user.create({
         data: { email: uniqueEmail('login'), password: pw, firstName: 'L', lastName: 'U', role: 'HOD', departmentId: testDept.id },
       });
       const res = await request(app).post('/api/auth/login').send({ email: u.email, password: 'Login@12345' });
       expect(res.status).toBe(200);
-      expect(res.body.data.token).toBeDefined();
+      expect(tokenFrom(res)).toBeTruthy();
+      expect(JSON.stringify(res.body)).not.toContain(tokenFrom(res));
+      expect(res.body.data.user).toBeDefined();
+      expect(res.body.data.user.password).toBeUndefined();
     });
 
     it('rejects wrong password', async () => {
