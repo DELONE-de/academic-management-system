@@ -1,8 +1,10 @@
 // FILE: frontend/src/lib/api.ts
-// Centralized API client — handles auth, session, and maps errors to friendly messages.
+// Centralized API client — handles auth (HttpOnly cookie), session, and maps
+// errors to friendly messages. The JWT is stored in an HttpOnly cookie by the
+// backend; axios sends it automatically with `withCredentials`.
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
-import { getToken, clearSession } from './session';
+import { clearSession } from './session';
 import { friendlyMessage } from './errors';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
@@ -11,13 +13,8 @@ const api: AxiosInstance = axios.create({
   baseURL: API_URL,
   headers: { 'Content-Type': 'application/json' },
   timeout: 60000,
-});
-
-// Attach token to every request
-api.interceptors.request.use((config) => {
-  const token = getToken();
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
+  // Send the HttpOnly auth cookie on same-origin / configured-origin requests.
+  withCredentials: true,
 });
 
 // Centralized response handling — never expose raw exceptions
@@ -26,7 +23,7 @@ api.interceptors.response.use(
   (error: AxiosError) => {
     const status = error.response?.status;
 
-    // Auth failure — clear session and redirect to login
+    // Auth failure — clear local state and redirect to login
     if (status === 401 && typeof window !== 'undefined') {
       clearSession();
       // Avoid redirect loops: only redirect if not already on login page
@@ -80,6 +77,10 @@ async function call<T>(
 export const authApi = {
   login: async (email: string, password: string) => {
     const response = await api.post('/auth/login', { email, password });
+    return response.data;
+  },
+  logout: async () => {
+    const response = await api.post('/auth/logout');
     return response.data;
   },
   getProfile: async () => {
@@ -181,7 +182,6 @@ export const uploadApi = {
     academicYear: string,
     departmentId?: string
   ): Promise<{ response: Response }> => {
-    const token = getToken();
     const formData = new FormData();
     formData.append('file', file);
     formData.append('uploadType', uploadType);
@@ -190,9 +190,8 @@ export const uploadApi = {
 
     const response = await fetch(`${API_URL}/upload`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      // Send the HttpOnly auth cookie on cross-origin requests
+      credentials: 'include',
       body: formData,
     });
 

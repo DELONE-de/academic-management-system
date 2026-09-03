@@ -4,12 +4,30 @@ import { Request, Response, NextFunction } from 'express';
 import { authService } from '../services/auth.service.js';
 import { sendSuccess, sendCreated } from '../utils/response.js';
 import { AuthRequest } from '../types/index.js';
+import { AUTH_COOKIE_NAME, authCookieOptions, getTokenMaxAgeMs } from '../config/cookies.js';
 
 export class AuthController {
   async login(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const result = await authService.login(req.body);
+      // Set HttpOnly cookie — this is the primary auth mechanism for browsers.
+      // The token is also returned in the body for backward compatibility with
+      // API clients and integration tests that use the Authorization header.
+      res.cookie(
+        AUTH_COOKIE_NAME,
+        result.token,
+        authCookieOptions(getTokenMaxAgeMs())
+      );
       sendSuccess(res, result, 'Login successful');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async logout(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      res.clearCookie(AUTH_COOKIE_NAME, { path: '/' });
+      sendSuccess(res, null, 'Logged out successfully');
     } catch (error) {
       next(error);
     }

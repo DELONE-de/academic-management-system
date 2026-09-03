@@ -141,4 +141,53 @@ describe('Auth API', () => {
       expect(res.status).toBe(401);
     });
   });
+
+  describe('Cookie authentication', () => {
+    it('login Sets-Cookie with acadmind_token', async () => {
+      const pw = await bcrypt.hash('Cookie@12345', 4);
+      const u = await prisma.user.create({
+        data: { email: uniqueEmail('cookie'), password: pw, firstName: 'C', lastName: 'U', role: 'HOD', departmentId: testDept.id },
+      });
+      const res = await request(app).post('/api/auth/login').send({ email: u.email, password: 'Cookie@12345' });
+      expect(res.status).toBe(200);
+      const setCookie = res.headers['set-cookie'];
+      expect(setCookie).toBeDefined();
+      expect(Array.isArray(setCookie) ? setCookie.join('') : setCookie).toContain('acadmind_token=');
+    });
+
+    it('authenticated request via cookie works (using supertest agent)', async () => {
+      const pw = await bcrypt.hash('Agent@12345', 4);
+      const u = await prisma.user.create({
+        data: { email: uniqueEmail('agent'), password: pw, firstName: 'A', lastName: 'G', role: 'HOD', departmentId: testDept.id },
+      });
+      const agent = request.agent(app);
+      await agent.post('/api/auth/login').send({ email: u.email, password: 'Agent@12345' });
+
+      // Agent now has the cookie; subsequent requests should be authenticated
+      const res = await agent.get('/api/auth/profile');
+      expect(res.status).toBe(200);
+      expect(res.body.data.email).toBe(u.email);
+    });
+
+    it('logout clears the cookie', async () => {
+      const pw = await bcrypt.hash('Logout@12345', 4);
+      const u = await prisma.user.create({
+        data: { email: uniqueEmail('logout'), password: pw, firstName: 'L', lastName: 'O', role: 'HOD', departmentId: testDept.id },
+      });
+      const agent = request.agent(app);
+      await agent.post('/api/auth/login').send({ email: u.email, password: 'Logout@12345' });
+
+      // Profile works
+      const profile = await agent.get('/api/auth/profile');
+      expect(profile.status).toBe(200);
+
+      // Logout clears the cookie
+      const logout = await agent.post('/api/auth/logout');
+      expect(logout.status).toBe(200);
+
+      // After logout, profile should fail
+      const afterLogout = await agent.get('/api/auth/profile');
+      expect(afterLogout.status).toBe(401);
+    });
+  });
 });

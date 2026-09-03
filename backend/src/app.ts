@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
+import cookieParser from 'cookie-parser';
 
 // Load environment variables
 dotenv.config();
@@ -78,6 +79,9 @@ if (process.env.NODE_ENV !== 'production' && process.env.MORGAN) {
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Cookie parsing (for HttpOnly auth cookie)
+app.use(cookieParser());
 
 // ======================
 // ROUTES

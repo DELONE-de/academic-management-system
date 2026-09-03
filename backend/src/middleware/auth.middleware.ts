@@ -4,11 +4,14 @@ import { Response, NextFunction } from 'express';
 import { UserRole } from '@prisma/client';
 import { AuthRequest } from '../types/index.js';
 import { extractToken, verifyToken } from '../config/jwt.js';
+import { AUTH_COOKIE_NAME } from '../config/cookies.js';
 import { sendUnauthorized, sendForbidden } from '../utils/response.js';
 import { prisma } from '../config/database.js';
 
 /**
- * Authentication middleware - verifies JWT token
+ * Authentication middleware - verifies JWT token from cookie or Authorization header.
+ * Cookie-based auth is the primary mechanism for browser clients; the Authorization
+ * header is supported for backward compatibility (API clients, integration tests).
  */
 export async function authenticate(
   req: AuthRequest,
@@ -16,7 +19,13 @@ export async function authenticate(
   next: NextFunction
 ): Promise<void> {
   try {
-    const token = extractToken(req.headers.authorization);
+    // Read token from cookie first (primary browser mechanism), then header fallback
+    let token: string | null = null;
+    if (req.cookies && req.cookies[AUTH_COOKIE_NAME]) {
+      token = req.cookies[AUTH_COOKIE_NAME];
+    } else {
+      token = extractToken(req.headers.authorization);
+    }
 
     if (!token) {
       sendUnauthorized(res, 'No authentication token provided');

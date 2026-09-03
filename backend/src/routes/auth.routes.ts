@@ -36,6 +36,13 @@ const registerLimiter = rateLimit({
 router.post('/login', loginLimiter, validateBody(loginSchema), authController.login);
 
 /**
+ * @route   POST /api/auth/logout
+ * @desc    Clear the authentication cookie
+ * @access  Public (safe — clearing a cookie is idempotent)
+ */
+router.post('/logout', authController.logout);
+
+/**
  * @route   GET /api/auth/bootstrap-status
  * @desc    Check whether the system has an initial administrator
  * @access  Public
