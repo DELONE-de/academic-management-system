@@ -45,6 +45,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loadUser();
   }, []);
 
+  // Listen for session invalidation from any API call (expired token, etc.).
+  // This clears user state reactively; RouteGuard handles the redirect, so we
+  // avoid the full-page-reload loop that a hard `window.location.href` causes.
+  useEffect(() => {
+    const onUnauthorized = () => {
+      setUser(null);
+      clearSession();
+      setIsLoading(false);
+    };
+    window.addEventListener('auth:unauthorized', onUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', onUnauthorized);
+  }, []);
+
   const login = useCallback(async (email: string, password: string) => {
     try {
       setIsLoading(true);

@@ -40,14 +40,15 @@ api.interceptors.response.use(
   (error: AxiosError) => {
     const status = error.response?.status;
 
-    // Auth failure — clear local state and redirect to login
+    // Auth failure — clear local session state without a hard redirect.
+    // The AuthContext listens for a custom event and updates user to null;
+    // RouteGuard (or the page's own logic) then handles the redirect to /login.
+    // This prevents the redirect loop where a 401 on the "am I logged in?"
+    // probe causes a full-page reload, which remounts AuthProvider, which
+    // fires the probe again — ad infinitum every few seconds.
     if (status === 401 && typeof window !== 'undefined') {
       clearSession();
-      // Avoid redirect loops: only redirect if not already on login page
-      if (!window.location.pathname.startsWith('/login')) {
-        window.location.href = '/login?expired=1';
-        return Promise.reject(error);
-      }
+      window.dispatchEvent(new Event('auth:unauthorized'));
     }
 
     return Promise.reject(error);
