@@ -11,6 +11,16 @@ import {
   parseLevel,
 } from '../validators/bulk.validator.js';
 
+/**
+ * Format-insensitive course code key. The normalization stage may render codes
+ * in spaced canonical form ("GST 111") while the DB stores compact form
+ * ("GST111") — or vice versa. Matching must ignore case, spaces, dashes,
+ * underscores and dots so valid uploads are not falsely flagged.
+ */
+export function courseCodeKey(code: string): string {
+  return (code || '').toUpperCase().replace(/[\s\-_.]/g, '');
+}
+
 // ============================================================
 // GEMINI FUNCTION DECLARATIONS
 // These are the tool schemas Gemini uses during function-calling
@@ -227,7 +237,7 @@ export async function validateCourse(
         where: { departmentId },
         select: { code: true },
       });
-      for (const c of dbCourses) courseMap.set(c.code.toUpperCase(), c);
+      for (const c of dbCourses) courseMap.set(courseCodeKey(c.code), c);
     }
   }
 
@@ -257,7 +267,7 @@ export async function validateCourse(
     });
     issues.push(...scoreErrors.filter((e) => !e.includes('Matric')));
 
-    if (!courseMap.has(c.courseCode.toUpperCase())) {
+    if (!courseMap.has(courseCodeKey(c.courseCode))) {
       issues.push(`Course '${c.courseCode}' not found in department '${args.departmentCode}'`);
       suggestions['courseCode'] = 'Verify the course code matches what is registered for this department';
     }
@@ -319,21 +329,18 @@ export async function checkRegistration(
   let foundCodes = new Set<string>();
   if (ctx) {
     for (const code of args.courseCodes) {
-      if (ctx.courseMap.has(code.toUpperCase())) foundCodes.add(code.toUpperCase());
+      if (ctx.courseMap.has(courseCodeKey(code))) foundCodes.add(courseCodeKey(code));
     }
   } else {
     const dbCourses = await prisma.course.findMany({
-      where: {
-        departmentId: student.departmentId,
-        code: { in: args.courseCodes.map((c) => c.toUpperCase()) },
-      },
+      where: { departmentId: student.departmentId },
       select: { code: true },
     });
-    foundCodes = new Set(dbCourses.map((c) => c.code.toUpperCase()));
+    foundCodes = new Set(dbCourses.map((c) => courseCodeKey(c.code)));
   }
 
   for (const code of args.courseCodes) {
-    if (!foundCodes.has(code.toUpperCase())) {
+    if (!foundCodes.has(courseCodeKey(code))) {
       issues.push(`Course '${code}' is not offered in student's department`);
     }
   }
@@ -411,13 +418,10 @@ export async function saveResult(
       select: { departmentId: true },
     });
     const courses = await prisma.course.findMany({
-      where: {
-        departmentId: studentDept!.departmentId,
-        code: { in: args.courses.map((c) => c.courseCode.toUpperCase()) },
-      },
+      where: { departmentId: studentDept!.departmentId },
       select: { id: true, code: true, unit: true, level: true, semester: true },
     });
-    courseMap = new Map(courses.map((c) => [c.code.toUpperCase(), c]));
+    courseMap = new Map(courses.map((c) => [courseCodeKey(c.code), c]));
   }
 
   let saved = 0;
@@ -428,7 +432,7 @@ export async function saveResult(
   // GPA is only recalculated once the batch is approved/published (results become OFFICIAL).
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     for (const c of args.courses) {
-      const course = courseMap.get(c.courseCode.toUpperCase());
+      const course = courseMap.get(courseCodeKey(c.courseCode));
       if (!course) { skipped++; continue; }
 
       const calc = calculateResult(c.score, course.unit, passMark);
@@ -521,7 +525,7 @@ export async function loadBatchValidationContext(
       where: { departmentId },
       select: { id: true, code: true, unit: true, level: true, semester: true },
     });
-    for (const c of courses) courseMap.set(c.code.toUpperCase(), c);
+    for (const c of courses) courseMap.set(courseCodeKey(c.code), c);
   }
 
   const matrics = [...new Set(

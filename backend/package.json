@@ -10,6 +10,7 @@
     "start": "node dist/src/app.js",
     "test": "jest --coverage",
     "test:watch": "jest --watch",
+    "test:endpoints": "tsx scripts/test-all-endpoints.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",

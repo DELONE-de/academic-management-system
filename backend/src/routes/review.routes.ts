@@ -6,7 +6,7 @@ import { assertUploadJobAccess, assertReviewItemAccess } from '../middleware/acc
 import { prisma } from '../config/database.js';
 import { AuthRequest } from '../types/index.js';
 import { UserRole } from '@prisma/client';
-import { saveResult } from '../ai/validation.tools.js';
+import { saveResult, courseCodeKey } from '../ai/validation.tools.js';
 
 const router = Router();
 router.use(authenticate);
@@ -220,7 +220,7 @@ async function commitReviewItem(
     const correctedScore = parseFloat(correctedValue);
     if (!isNaN(correctedScore)) {
       courses = courses.map((c) =>
-        c.courseCode.toUpperCase() === item.originalValue?.toUpperCase()
+        courseCodeKey(c.courseCode) === courseCodeKey(item.originalValue ?? '')
           ? { ...c, score: correctedScore }
           : c
       );
