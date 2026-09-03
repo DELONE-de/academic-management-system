@@ -21,9 +21,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // The JWT lives in an HttpOnly cookie — it is never read from localStorage.
   useEffect(() => {
     const loadUser = async () => {
+      // If we have no known prior session (no cached user from a previous
+      // login), there is nothing to validate yet. Skip the /profile call
+      // entirely instead of firing a pointless 401 that would be misread as
+      // "session expired". RouteGuard redirects to /login silently.
+      const cached = getStoredUser<User>();
+      if (!cached) {
+        setIsLoading(false);
+        return;
+      }
+
       try {
-        const cached = getStoredUser<User>();
-        if (cached) setUser(cached);
+        setUser(cached);
 
         // Verify session against the backend (cookie sent automatically)
         const response = await authApi.getProfile();
