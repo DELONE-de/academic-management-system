@@ -29,26 +29,16 @@ const registerLimiter = rateLimit({
 });
 
 /**
- * @route   GET /api/auth/csrf
- * @desc    Issue a fresh CSRF token via the X-CSRF-Token response header
- *          (set by the global csrfProtection middleware). The frontend calls
- *          this on boot to obtain a token before its first state-changing
- *          request.
- * @access  Public (issuing a token is safe; validation happens on write ops)
- */
-router.get('/csrf', authController.csrf);
-
-/**
  * @route   POST /api/auth/login
- * @desc    Authenticate user and get token
+ * @desc    Authenticate user; returns { user, token } in the response body
  * @access  Public
  */
 router.post('/login', loginLimiter, validateBody(loginSchema), authController.login);
 
 /**
  * @route   POST /api/auth/logout
- * @desc    Clear the authentication cookie
- * @access  Public (safe — clearing a cookie is idempotent)
+ * @desc    Acknowledge logout (stateless JWT — the client discards its token)
+ * @access  Public (safe — no server-side session to destroy)
  */
 router.post('/logout', authController.logout);
 

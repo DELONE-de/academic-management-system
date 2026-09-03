@@ -6,7 +6,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { useRouter } from 'next/navigation';
 import { User, AuthContextType } from '@/types';
 import { authApi } from '@/lib/api';
-import { getStoredUser, setStoredUser, clearSession } from '@/lib/session';
+import { getStoredUser, setStoredUser, getToken, setToken, clearSession } from '@/lib/session';
 import { toFriendlyError } from '@/lib/errors';
 import toast from 'react-hot-toast';
 
@@ -17,24 +17,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
-  // On mount, hydrate from the HttpOnly cookie by fetching the profile.
-  // The JWT lives in an HttpOnly cookie — it is never read from localStorage.
+  // On mount, hydrate from the stored token by fetching the profile.
+  // The JWT lives in localStorage under a dedicated key; the api.ts request
+  // interceptor attaches it as an Authorization header automatically.
   useEffect(() => {
     const loadUser = async () => {
-      // If we have no known prior session (no cached user from a previous
-      // login), there is nothing to validate yet. Skip the /profile call
-      // entirely instead of firing a pointless 401 that would be misread as
-      // "session expired". RouteGuard redirects to /login silently.
-      const cached = getStoredUser<User>();
-      if (!cached) {
+      // A cached user without a stored token is NOT a valid session under
+      // header-based auth — skip the /profile call entirely instead of
+      // firing a pointless 401 that would be misread as "session expired".
+      // RouteGuard redirects to /login silently.
+      const token = getToken();
+      if (!token) {
         setIsLoading(false);
         return;
       }
 
       try {
-        setUser(cached);
+        const cached = getStoredUser<User>();
+        if (cached) setUser(cached);
 
-        // Verify session against the backend (cookie sent automatically)
+        // Verify session against the backend (Bearer header attached by interceptor)
         const response = await authApi.getProfile();
         if (response.success) {
           setUser(response.data);
@@ -73,6 +75,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const response = await authApi.login(email, password);
 
       if (response.success) {
+        // Store the JWT (attached by the api.ts interceptor on every request)
+        // and the non-sensitive user data for UI hydration.
+        setToken(response.data.token);
         setUser(response.data.user);
         setStoredUser(response.data.user);
         toast.success('Login successful!');
@@ -90,7 +95,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   const logout = useCallback(async () => {
-    // Clear the HttpOnly cookie server-side, then clear local state
+    // Acknowledge logout server-side (stateless JWT — no server session),
+    // then discard the local token and user state
     try {
       await authApi.logout();
     } catch {

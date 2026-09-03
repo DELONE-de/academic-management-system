@@ -6,7 +6,6 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
-import cookieParser from 'cookie-parser';
 
 // Load environment variables
 dotenv.config();
@@ -17,7 +16,6 @@ validateEnv();
 
 import routes from './routes/index.js';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware.js';
-import { csrfProtection } from './middleware/csrf.middleware.js';
 import { connectDatabase, disconnectDatabase } from './config/database.js';
 import { requestCorrelation, logger } from './utils/logger.js';
 import process from 'process';
@@ -61,6 +59,8 @@ app.use(requestCorrelation);
 // FRONTEND_URL is a comma-separated list of the exact allowed origins
 // (e.g. the Vercel production/preview URLs). localhost is allowed in
 // non-production for local development.
+// Note: `credentials: true` is not needed — auth is header-based (Bearer
+// token), not cookie-based, so the browser never sends ambient credentials.
 const allowedOrigins = process.env.FRONTEND_URL
   ? process.env.FRONTEND_URL.split(',').map((o) => o.trim().replace(/\/$/, '')).filter(Boolean)
   : [];
@@ -76,10 +76,8 @@ app.use(
       }
       callback(new Error(`CORS: origin ${origin} not allowed`));
     },
-    credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
-    exposedHeaders: ['X-CSRF-Token'], // so the cross-origin frontend can read the CSRF token
+    allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
 
@@ -93,15 +91,11 @@ if (process.env.NODE_ENV !== 'production' && process.env.MORGAN) {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Cookie parsing (for HttpOnly auth cookie)
-app.use(cookieParser());
-
 // ======================
 // ROUTES
 // ======================
 
-// API routes — CSRF protection for cookie-authenticated state-changing requests
-app.use('/api', csrfProtection, routes);
+app.use('/api', routes);
 
 // Root endpoint
 app.get('/', (req, res) => {

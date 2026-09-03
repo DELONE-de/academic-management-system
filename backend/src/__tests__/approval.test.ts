@@ -10,12 +10,9 @@ let counter = 0;
 const uniqueEmail = (p: string) => `${p}.${++counter}.${Date.now()}@test.com`;
 const uniqueCode = (p: string) => `${p}${++counter}`;
 
-/** Extract the auth JWT from a login response's Set-Cookie header. */
+/** Extract the auth JWT from the login response body ({ data: { token } }). */
 function tokenFrom(res: request.Response): string {
-  const setCookie = (res.headers['set-cookie'] || []) as unknown as string[];
-  const cookie = (Array.isArray(setCookie) ? setCookie : [setCookie])
-    .find((c: string) => c.startsWith('acadmind_token='));
-  return cookie ? cookie.split(';')[0].split('=').slice(1).join('=') : '';
+  return res.body?.data?.token ?? '';
 }
 let dept: any, faculty: any;
 let hodToken: string, deanToken: string, examToken: string;

@@ -4,42 +4,29 @@ import { Request, Response, NextFunction } from 'express';
 import { authService } from '../services/auth.service.js';
 import { sendSuccess, sendCreated } from '../utils/response.js';
 import { AuthRequest } from '../types/index.js';
-import { AUTH_COOKIE_NAME, authCookieOptions, authCookieClearOptions, getTokenMaxAgeMs } from '../config/cookies.js';
 
 export class AuthController {
   async login(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { user, token } = await authService.login(req.body);
-      // Set the HttpOnly auth cookie — the primary (and only browser) transport
-      // for the token. The token is NEVER returned in the response body, so it
-      // is never readable by JavaScript. API clients/tests use the cookie or
-      // the documented Authorization header fallback.
-      res.cookie(AUTH_COOKIE_NAME, token, authCookieOptions(getTokenMaxAgeMs()));
-      sendSuccess(res, { user }, 'Login successful');
+      // Header-based (Bearer) auth: the token is returned in the response body
+      // and the client stores it, attaching it as an Authorization header on
+      // every request. There is no server-side session.
+      sendSuccess(res, { user, token }, 'Login successful');
     } catch (error) {
       next(error);
     }
   }
 
-  async logout(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async logout(_req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      // Clear with the exact same name/path/sameSite/secure used when setting —
-      // mismatched options are a common cause of stale surviving cookies.
-      res.clearCookie(AUTH_COOKIE_NAME, authCookieClearOptions());
+      // Header-based JWT is stateless: the server holds no session to destroy.
+      // The client discards its token; this endpoint exists for API
+      // compatibility and simply acknowledges the logout.
       sendSuccess(res, null, 'Logged out successfully');
     } catch (error) {
       next(error);
     }
-  }
-
-  /**
-   * Issues a fresh CSRF token via the X-CSRF-Token response header.
-   * The csrfProtection middleware (mounted before all /api routes) already
-   * sets that header on every response — this endpoint simply exists so the
-   * frontend has a canonical GET endpoint to call on boot.
-   */
-  async csrf(req: Request, res: Response): Promise<void> {
-    sendSuccess(res, null, 'CSRF token issued');
   }
 
   async register(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {

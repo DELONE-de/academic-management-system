@@ -52,10 +52,7 @@ beforeAll(async () => {
   });
 
   const loginRes = await request(app).post('/api/auth/login').send({ email: hod.email, password: 'Hod@12345' });
-  const setCookie = (loginRes.headers['set-cookie'] || []) as unknown as string[];
-  const authCookie = (Array.isArray(setCookie) ? setCookie : [setCookie])
-    .find((c: string) => c.startsWith('acadmind_token='));
-  authToken = authCookie ? authCookie.split(';')[0].split('=').slice(1).join('=') : '';
+  authToken = loginRes.body?.data?.token ?? '';
 });
 
 afterAll(async () => {

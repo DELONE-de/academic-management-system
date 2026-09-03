@@ -9,8 +9,8 @@
 //   2. Starts a local mock OpenRouter server so AI-dependent endpoints
 //      (GPA explanation) are exercised deterministically without network.
 //   3. Seeds a faculty/department/users/students/courses dataset.
-//   4. Hits EVERY endpoint with correct auth (Bearer + HttpOnly cookie flows,
-//      including the post-login cookie session scenario) and asserts status.
+//   4. Hits EVERY endpoint with correct auth (Bearer Authorization header) and
+//      asserts status, including the post-login header-session scenario.
 //   5. Prints a PASS/FAIL summary and exits non-zero on any failure.
 
 import http from 'http';
@@ -194,14 +194,11 @@ const YEAR = '2024/2025';
 const LEVEL = 'LEVEL_100';
 const SEM = 'FIRST';
 
-async function login(email: string, password = PW): Promise<{ token: string; cookieHeader: string; csrf: string | null }> {
+async function login(email: string, password = PW): Promise<{ token: string }> {
   const res = await request(app).post('/api/auth/login').send({ email, password });
-  const setCookies: string[] = (res.headers['set-cookie'] as any) || [];
-  const cookieHeader = setCookies.map((c) => c.split(';')[0]).join('; ');
-  const csrf = /csrf-token=([^;]+)/.exec(cookieHeader)?.[1] ?? null;
-  // Token is delivered via Set-Cookie only — never in the response body.
-  const token = /acadmind_token=([^;]+)/.exec(cookieHeader)?.[1] ?? '';
-  return { token, cookieHeader, csrf };
+  // Header-based auth: the token is returned in the response body
+  const token: string = res.body?.data?.token ?? '';
+  return { token };
 }
 
 const dean = await login('dean@test.local');
@@ -209,7 +206,6 @@ const hod = await login('hod@test.local');
 const hod2 = await login('hod2@test.local');
 const lect = await login('lect@test.local');
 const exam = await login('exam@test.local');
-const tokenOnlyCookie = /acadmind_token=[^;]+/.exec(hod.cookieHeader)?.[0] ?? '';
 
 const H = (tok: string) => ({ Authorization: `Bearer ${tok}` });
 
@@ -228,42 +224,27 @@ await t('POST /api/auth/login (wrong password → 401)', 401, () =>
 await t('POST /api/auth/login (invalid body → 400)', 400, () =>
   request(app).post('/api/auth/login').send({ email: 'not-an-email' })
 );
-await t('POST /api/auth/login (valid → 200 + cookie, NO token in body)', 200, async () => {
+await t('POST /api/auth/login (valid → 200, token in body, NO Set-Cookie)', 200, async () => {
   const res = await request(app).post('/api/auth/login').send({ email: 'hod@test.local', password: PW });
-  assert('login sets HttpOnly auth cookie', /acadmind_token=/.test(res.headers['set-cookie']?.join(';') || ''));
-  assert('login does NOT leak token in body', !JSON.stringify(res.body).includes('eyJ'));
+  assert('login returns token in body', !!res.body?.data?.token);
   assert('login returns user data in body', !!res.body?.data?.user);
-  return res;
-});
-await t('GET  /api/auth/csrf (issues X-CSRF-Token header → 200)', 200, async () => {
-  const res = await request(app).get('/api/auth/csrf');
-  assert('csrf endpoint sets X-CSRF-Token header', !!res.headers['x-csrf-token']);
+  assert('login does NOT set an auth cookie', !res.headers['set-cookie']);
   return res;
 });
 
-// ---- prompt.txt scenario: cookie session right after login ----
-await t('GET  /api/auth/profile (cookie session after login → 200, NOT 401)', 200, () =>
-  request(app).get('/api/auth/profile').set('Cookie', hod.cookieHeader)
+// ---- prompt.txt scenario: header session right after login ----
+await t('GET  /api/auth/profile (Bearer right after login → 200, NOT 401)', 200, () =>
+  request(app).get('/api/auth/profile').set(H(hod.token))
 );
-await t('GET  /api/reports/dashboard (cookie session after login → 200)', 200, () =>
-  request(app).get('/api/reports/dashboard').set('Cookie', hod.cookieHeader)
+await t('GET  /api/reports/dashboard (Bearer after login → 200)', 200, () =>
+  request(app).get('/api/reports/dashboard').set(H(hod.token))
 );
-await t('GET  /api/upload (cookie session after login → 200)', 200, () =>
-  request(app).get('/api/upload').set('Cookie', hod.cookieHeader)
+await t('GET  /api/upload (Bearer after login → 200)', 200, () =>
+  request(app).get('/api/upload').set(H(hod.token))
 );
-await t('POST /api/students (cookie, no CSRF header → 403)', 403, () =>
-  request(app).post('/api/students').set('Cookie', tokenOnlyCookie).send({
-    matricNumber: 'HIM/2024/0999', firstName: 'No', lastName: 'Csrf', currentLevel: LEVEL, admissionYear: 2024, departmentId: ctx.d1.id,
-  })
-);
-await t('POST /api/students (cookie + CSRF header → 201)', 201, () =>
-  request(app).post('/api/students').set('Cookie', hod.cookieHeader).set('X-CSRF-Token', hod.csrf || '').send({
-    matricNumber: 'HIM/2024/0999', firstName: 'Csrf', lastName: 'Passes', currentLevel: LEVEL, admissionYear: 2024, departmentId: ctx.d1.id,
-  })
-);
-await t('POST /api/auth/logout', 200, () => request(app).post('/api/auth/logout'));
+await t('POST /api/auth/logout (stateless no-op → 200)', 200, () => request(app).post('/api/auth/logout'));
 
-// ---- Bearer auth ----
+// ---- Bearer auth negative cases ----
 await t('GET  /api/auth/profile (no token → 401)', 401, () => request(app).get('/api/auth/profile'));
 await t('GET  /api/auth/profile (garbage token → 401)', 401, () =>
   request(app).get('/api/auth/profile').set('Authorization', 'Bearer not.a.jwt')

@@ -1,10 +1,11 @@
 // FILE: frontend/src/lib/api.ts
-// Centralized API client — handles auth (HttpOnly cookie), session, and maps
-// errors to friendly messages. The JWT is stored in an HttpOnly cookie by the
-// backend; axios sends it automatically with `withCredentials`.
+// Centralized API client — handles auth (Bearer token), session, and maps
+// errors to friendly messages. The JWT is stored in localStorage (dedicated
+// key, via lib/session.ts) and attached as an Authorization header on every
+// request by the request interceptor below.
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
-import { clearSession, getCsrfToken, setCsrfToken } from './session';
+import { clearSession, getStoredUser, getToken, setToken } from './session';
 import { friendlyMessage } from './errors';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
@@ -13,25 +14,15 @@ const api: AxiosInstance = axios.create({
   baseURL: API_URL,
   headers: { 'Content-Type': 'application/json' },
   timeout: 60000,
-  // Send the HttpOnly auth cookie on same-origin / configured-origin requests.
-  withCredentials: true,
 });
 
-// Attach the CSRF token header to state-changing requests
+// Attach the stored JWT as a Bearer token on every request
 api.interceptors.request.use((config) => {
-  if (config.method && ['post', 'put', 'patch', 'delete'].includes(config.method.toLowerCase())) {
-    const csrf = getCsrfToken();
-    if (csrf) config.headers['X-CSRF-Token'] = csrf;
+  const token = getToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
-});
-
-// Capture the CSRF token from every response header (cross-origin deployments
-// cannot read the backend-domain cookie, so the header is the source of truth).
-api.interceptors.response.use((response) => {
-  const csrfHeader = response.headers?.['x-csrf-token'];
-  if (csrfHeader) setCsrfToken(csrfHeader);
-  return response;
 });
 
 // Centralized response handling — never expose raw exceptions
@@ -206,12 +197,12 @@ export const uploadApi = {
     formData.append('academicYear', academicYear);
     if (departmentId) formData.append('departmentId', departmentId);
 
-    const csrf = getCsrfToken();
+    const token = getToken();
     const response = await fetch(`${API_URL}/upload`, {
       method: 'POST',
-      // Send the HttpOnly auth cookie on cross-origin requests
-      credentials: 'include',
-      headers: csrf ? { 'X-CSRF-Token': csrf } : {},
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: formData,
     });
 

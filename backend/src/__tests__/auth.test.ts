@@ -6,7 +6,6 @@ import request from 'supertest';
 import app from '../app.js';
 import { prisma } from '../config/database.js';
 import bcrypt from 'bcryptjs';
-import { AUTH_COOKIE_NAME } from '../config/cookies.js';
 
 let counter = 0;
 const unique = (p: string) => `${p}_${++counter}_${Date.now()}`;
@@ -14,14 +13,12 @@ const uniqueEmail = (p: string) => `${p.replace('@', '.')}.${++counter}.${Date.n
 const uniqueCode = (p: string) => `${p}${++counter}${Date.now().toString().slice(-4)}`;
 
 /**
- * Extract the JWT from the login response's Set-Cookie header.
- * The token is deliberately NOT in the response body (never readable by JS).
+ * Extract the JWT from the login response body ({ data: { user, token } }).
+ * Header-based auth: the client stores this token and sends it as a Bearer
+ * Authorization header on subsequent requests.
  */
 function tokenFrom(res: request.Response): string {
-  const setCookie = (res.headers['set-cookie'] || []) as unknown as string[];
-  const cookie = (Array.isArray(setCookie) ? setCookie : [setCookie])
-    .find((c: string) => c.startsWith(`${AUTH_COOKIE_NAME}=`));
-  return cookie ? cookie.split(';')[0].split('=').slice(1).join('=') : '';
+  return res.body?.data?.token ?? '';
 }
 
 let deanToken: string;
@@ -56,7 +53,7 @@ beforeAll(async () => {
     data: { email: uniqueEmail('dean'), password: pw, firstName: 'Dean', lastName: 'Admin', role: 'DEAN', facultyId: testFaculty.id },
   });
 
-  // Login as DEAN to get token (from Set-Cookie — token is not in the body)
+  // Login as DEAN to get token (from the response body)
   const loginRes = await request(app).post('/api/auth/login').send({ email: deanUser.email, password: 'Dean@12345' });
   if (loginRes.status === 200 && loginRes.body.data) {
     deanToken = tokenFrom(loginRes);
@@ -102,7 +99,7 @@ describe('Auth API', () => {
   });
 
   describe('Login', () => {
-    it('accepts valid credentials and does NOT leak the token in the body', async () => {
+    it('accepts valid credentials and returns token + user in the body', async () => {
       const pw = await bcrypt.hash('Login@12345', 4);
       const u = await prisma.user.create({
         data: { email: uniqueEmail('login'), password: pw, firstName: 'L', lastName: 'U', role: 'HOD', departmentId: testDept.id },
@@ -110,7 +107,6 @@ describe('Auth API', () => {
       const res = await request(app).post('/api/auth/login').send({ email: u.email, password: 'Login@12345' });
       expect(res.status).toBe(200);
       expect(tokenFrom(res)).toBeTruthy();
-      expect(JSON.stringify(res.body)).not.toContain(tokenFrom(res));
       expect(res.body.data.user).toBeDefined();
       expect(res.body.data.user.password).toBeUndefined();
     });
@@ -157,52 +153,50 @@ describe('Auth API', () => {
     });
   });
 
-  describe('Cookie authentication', () => {
-    it('login Sets-Cookie with acadmind_token', async () => {
-      const pw = await bcrypt.hash('Cookie@12345', 4);
+  describe('Header-based authentication', () => {
+    it('login does NOT set an auth cookie (no Set-Cookie header)', async () => {
+      const pw = await bcrypt.hash('Header@12345', 4);
       const u = await prisma.user.create({
-        data: { email: uniqueEmail('cookie'), password: pw, firstName: 'C', lastName: 'U', role: 'HOD', departmentId: testDept.id },
+        data: { email: uniqueEmail('header'), password: pw, firstName: 'H', lastName: 'DR', role: 'HOD', departmentId: testDept.id },
       });
-      const res = await request(app).post('/api/auth/login').send({ email: u.email, password: 'Cookie@12345' });
+      const res = await request(app).post('/api/auth/login').send({ email: u.email, password: 'Header@12345' });
       expect(res.status).toBe(200);
       const setCookie = res.headers['set-cookie'];
-      expect(setCookie).toBeDefined();
-      expect(Array.isArray(setCookie) ? setCookie.join('') : setCookie).toContain('acadmind_token=');
+      expect(setCookie).toBeUndefined();
     });
 
-    it('authenticated request via cookie works (using supertest agent)', async () => {
-      const pw = await bcrypt.hash('Agent@12345', 4);
+    it('authenticated request via Authorization header works', async () => {
+      const pw = await bcrypt.hash('Bearer@12345', 4);
       const u = await prisma.user.create({
-        data: { email: uniqueEmail('agent'), password: pw, firstName: 'A', lastName: 'G', role: 'HOD', departmentId: testDept.id },
+        data: { email: uniqueEmail('bearer'), password: pw, firstName: 'B', lastName: 'EAR', role: 'HOD', departmentId: testDept.id },
       });
-      const agent = request.agent(app);
-      await agent.post('/api/auth/login').send({ email: u.email, password: 'Agent@12345' });
+      const login = await request(app).post('/api/auth/login').send({ email: u.email, password: 'Bearer@12345' });
+      const token = tokenFrom(login);
+      expect(token).toBeTruthy();
 
-      // Agent now has the cookie; subsequent requests should be authenticated
-      const res = await agent.get('/api/auth/profile');
+      const res = await request(app)
+        .get('/api/auth/profile')
+        .set('Authorization', `Bearer ${token}`);
       expect(res.status).toBe(200);
       expect(res.body.data.email).toBe(u.email);
     });
 
-    it('logout clears the cookie', async () => {
-      const pw = await bcrypt.hash('Logout@12345', 4);
-      const u = await prisma.user.create({
-        data: { email: uniqueEmail('logout'), password: pw, firstName: 'L', lastName: 'O', role: 'HOD', departmentId: testDept.id },
-      });
-      const agent = request.agent(app);
-      await agent.post('/api/auth/login').send({ email: u.email, password: 'Logout@12345' });
+    it('requests without a token are rejected', async () => {
+      const res = await request(app).get('/api/auth/profile');
+      expect(res.status).toBe(401);
+    });
 
-      // Profile works
-      const profile = await agent.get('/api/auth/profile');
-      expect(profile.status).toBe(200);
+    it('logout is a stateless no-op that returns success', async () => {
+      const res = await request(app).post('/api/auth/logout');
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+    });
 
-      // Logout clears the cookie
-      const logout = await agent.post('/api/auth/logout');
-      expect(logout.status).toBe(200);
-
-      // After logout, profile should fail
-      const afterLogout = await agent.get('/api/auth/profile');
-      expect(afterLogout.status).toBe(401);
+    it('expired/garbage tokens are rejected', async () => {
+      const res = await request(app)
+        .get('/api/auth/profile')
+        .set('Authorization', 'Bearer not.a.real.jwt');
+      expect(res.status).toBe(401);
     });
   });
 });
