@@ -1,9 +1,9 @@
 // src/middleware/csrf.middleware.ts
 // CSRF protection for cookie-authenticated requests.
-// The backend sets a non-HttpOnly csrf-token cookie on each response.
-// State-changing requests (POST/PUT/PATCH/DELETE) must include a matching
-// X-CSRF-Token header. SameSite=Lax on the auth cookie already prevents
-// cross-site POST requests; this is defense-in-depth.
+// The backend sets a non-HttpOnly csrf-token cookie AND exposes the same token
+// in the X-CSRF-Token response header so a cross-origin frontend (Vercel → Render)
+// can read it and echo it back. State-changing requests (POST/PUT/PATCH/DELETE)
+// must include a matching X-CSRF-Token header.
 
 import { Request, Response, NextFunction } from 'express';
 import { randomUUID } from 'crypto';
@@ -22,9 +22,14 @@ const CSRF_EXEMPT_PATHS = new Set([
 ]);
 
 export function csrfProtection(req: Request, res: Response, next: NextFunction): void {
-  if (!req.cookies?.[CSRF_COOKIE]) {
-    setCsrfCookie(res);
+  // Ensure the CSRF token exists (cookie + response header) on every request.
+  const existing = req.cookies?.[CSRF_COOKIE];
+  const token = existing && existing.length >= 16 ? existing : randomUUID();
+  if (!existing || existing.length < 16) {
+    setCsrfCookie(res, token);
   }
+  // Expose the token to the frontend via a response header (readable cross-origin).
+  res.setHeader('X-CSRF-Token', token);
 
   if (CSRF_EXEMPT_PATHS.has(req.baseUrl + req.path) || CSRF_EXEMPT_PATHS.has(req.originalUrl)) {
     next();
@@ -59,13 +64,14 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction):
   next();
 }
 
-function setCsrfCookie(res: Response): void {
-  const token = randomUUID();
+function setCsrfCookie(res: Response, token: string): void {
   const isProduction = process.env.NODE_ENV === 'production';
   res.cookie(CSRF_COOKIE, token, {
     httpOnly: false,       // readable by JavaScript for the frontend to send back
     secure: isProduction,
-    sameSite: 'strict',
+    // None in production so the cookie is sent on cross-origin (Vercel→Render)
+    // credentialed requests; Lax in development (same-site localhost).
+    sameSite: isProduction ? 'none' : 'lax',
     path: '/',
   });
 }

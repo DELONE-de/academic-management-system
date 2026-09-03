@@ -4,7 +4,7 @@
 // backend; axios sends it automatically with `withCredentials`.
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
-import { clearSession, getCsrfToken } from './session';
+import { clearSession, getCsrfToken, setCsrfToken } from './session';
 import { friendlyMessage } from './errors';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
@@ -24,6 +24,14 @@ api.interceptors.request.use((config) => {
     if (csrf) config.headers['X-CSRF-Token'] = csrf;
   }
   return config;
+});
+
+// Capture the CSRF token from every response header (cross-origin deployments
+// cannot read the backend-domain cookie, so the header is the source of truth).
+api.interceptors.response.use((response) => {
+  const csrfHeader = response.headers?.['x-csrf-token'];
+  if (csrfHeader) setCsrfToken(csrfHeader);
+  return response;
 });
 
 // Centralized response handling — never expose raw exceptions
