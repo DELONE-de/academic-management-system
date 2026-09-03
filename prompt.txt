@@ -1,0 +1,633 @@
+ACADMIND AI — REMAINING IMPLEMENTATION ROADMAP
+
+You are continuing development of the existing AcadMind AI university academic/GPA management system.
+
+The project already has substantial work completed. Do not restart, rewrite, or introduce unrelated features. Your job is to finish the remaining implementation phases in a controlled, production-oriented sequence.
+
+CURRENT STATE
+
+Already completed:
+
+- Security hardening
+- Environment validation
+- Registration/bootstrap security
+- Department access control
+- JWT secret hardening
+- Upload/review/result/GPA scoping fixes
+- Transactional "saveResult()"
+- Deterministic academic calculations
+- Approval workflow foundations
+- Broken signup/setup functionality fixed
+- Backend TypeScript compilation
+- Frontend build
+- Synthetic seed data
+- 67+ backend tests
+- Gemini safety controls
+- AI schema validation
+- Confidence scoring
+- Anomaly detection
+- AI auditability
+- OpenRouter integration
+- Google Gemma 4 31B as primary AI provider
+- Gemini fallback
+- Groq fallback
+- Provider abstraction
+- AI routing/fallback handling
+- Vision routing improvements
+- Provider-neutral SSE messaging
+- AI upload performance/reliability work
+
+The deterministic academic engine remains authoritative.
+
+AI must NEVER directly override official academic calculations.
+
+The architecture remains a modular monolith.
+
+Do NOT introduce Redis, Kafka, BullMQ, microservices, queues, or other new infrastructure unless the existing code absolutely requires it for a bug fix.
+
+---
+
+IMPORTANT EXECUTION RULE
+
+Work through the phases below in order.
+
+After completing each phase:
+
+1. Run relevant tests.
+2. Run the full backend test suite.
+3. Run TypeScript compilation.
+4. Run frontend build when frontend code was changed.
+5. Inspect for regressions.
+6. Commit the phase separately.
+7. Record the commit hash.
+8. Only then continue to the next phase.
+
+Do not combine unrelated phases into one giant change.
+
+Do not add new product features.
+
+Do not remove existing functionality unless it is insecure, broken, duplicated, or demonstrably unnecessary.
+
+---
+
+PHASE 1 — AUTHENTICATION HARDENING
+
+Objective
+
+Move authentication away from browser-accessible JWT storage and establish secure cookie-based authentication.
+
+Audit the current authentication implementation first.
+
+Implement:
+
+- HttpOnly authentication cookies
+- Secure cookies in production
+- SameSite protection appropriate to the existing deployment architecture
+- Proper cookie expiration
+- Logout that invalidates/removes the cookie
+- Existing JWT authentication behavior preserved
+- Backend authentication middleware updated to read the secure cookie
+- Remove frontend dependency on localStorage for authentication tokens
+- Remove unnecessary token exposure to JavaScript
+- Ensure refresh/session behavior is consistent with the existing architecture
+
+Do NOT redesign authentication completely.
+
+Do NOT add OAuth/social login.
+
+Do NOT add unrelated authentication features.
+
+Test:
+
+- login
+- authenticated requests
+- logout
+- expired authentication
+- invalid authentication
+- protected routes
+- role authorization
+- browser/API behavior
+
+---
+
+PHASE 2 — CSRF PROTECTION
+
+Because authentication is moving to cookies, implement appropriate CSRF protection.
+
+First inspect whether the existing API is same-origin or cross-origin and determine the least invasive correct approach.
+
+Implement:
+
+- CSRF protection for state-changing requests
+- POST
+- PUT
+- PATCH
+- DELETE
+- appropriate exemption for safe methods
+- correct frontend API integration
+- clear failure responses
+- tests for valid and invalid CSRF requests
+
+Do not introduce unnecessary infrastructure.
+
+Ensure file uploads and SSE continue working.
+
+Verify that authentication + CSRF work together.
+
+---
+
+PHASE 3 — APPROVAL / PUBLICATION ARCHITECTURE VERIFICATION
+
+Audit the complete academic lifecycle:
+
+"UPLOAD → EXTRACTION → VALIDATION → PROPOSED RESULT → REVIEW → APPROVAL → PUBLICATION → GPA/CGPA"
+
+Verify that:
+
+- AI-extracted data cannot silently become official
+- deterministic calculations remain authoritative
+- proposed results remain distinguishable from official results
+- review items are properly linked
+- approval hierarchy is enforced
+- duplicate approvals are prevented
+- unauthorized users cannot approve records outside their scope
+- published records cannot be modified without the intended workflow
+- GPA calculations use only the correct official/published data
+- audit logs capture important state transitions
+- department/faculty/role scoping is enforced throughout
+
+Fix any architectural or security problems found.
+
+Add regression tests for the entire lifecycle.
+
+Do not redesign the workflow unless necessary to fix a real integrity/security problem.
+
+---
+
+PHASE 4 — STRUCTURED LOGGING & CORRELATION
+
+Audit the current logging implementation.
+
+Implement lightweight production-grade structured logging.
+
+Every important request/AI/upload/approval operation should be traceable using a correlation/request ID.
+
+Include useful fields such as:
+
+- request ID
+- timestamp
+- HTTP method
+- route
+- status
+- duration
+- user/role where appropriate
+- operation
+- AI provider
+- AI model
+- upload job ID
+- relevant academic entity IDs
+- error classification
+
+NEVER log:
+
+- passwords
+- JWTs
+- API keys
+- database credentials
+- raw uploaded documents
+- unnecessary student personal data
+- sensitive AI payloads
+
+Ensure errors remain useful for debugging.
+
+Keep logging lightweight.
+
+Do not introduce an external logging platform unless one already exists.
+
+Add tests where practical.
+
+---
+
+PHASE 5 — FRONTEND HARDENING & AI-FIRST UX
+
+Now audit the actual Next.js frontend against the existing backend.
+
+The objective is NOT to create new features.
+
+The objective is to make the existing academic workflow trustworthy, understandable, responsive, and professional.
+
+Audit and improve:
+
+Authentication
+
+- secure cookie authentication
+- protected routes
+- correct logout
+- role-aware navigation
+- proper 401 handling
+- proper 403 handling
+
+Dashboard
+
+Clearly surface existing academic workflow information.
+
+Prioritize useful existing metrics such as:
+
+- upload jobs
+- records awaiting review
+- anomalies
+- approval status
+- published results
+- GPA/CGPA information
+
+Do not fabricate statistics.
+
+AI Upload Workflow
+
+Make the existing AI pipeline understandable.
+
+Show appropriate states such as:
+
+- Uploading
+- Parsing
+- Extracting
+- Validating
+- Analyzing
+- Preparing Review
+- Complete
+- Failed
+
+Do not hard-code "Gemini" or another specific provider.
+
+Show useful AI review information already supplied by the backend:
+
+- confidence
+- anomaly status
+- source/extraction information
+- suggested correction where available
+- validation status
+
+Clearly distinguish:
+
+- extracted
+- proposed
+- under review
+- approved
+- published
+
+AI suggestions must never visually imply that they are automatically official.
+
+Result Management
+
+Improve existing:
+
+- result entry
+- bulk result workflows
+- course management
+- student management
+- GPA/CGPA views
+- transcript views
+- approval queues
+- approval status
+
+Errors
+
+Replace swallowed errors with useful user-facing messages.
+
+Handle:
+
+- 400
+- 401
+- 403
+- 404
+- 409
+- 429
+- 500
+- network errors
+- AI provider/rate-limit failures
+
+Do not expose internal stack traces or secrets.
+
+Forms
+
+Audit validation.
+
+Use the existing React Hook Form/Zod architecture where already present.
+
+Provide:
+
+- clear validation
+- loading states
+- disabled submit states
+- success feedback
+- failure feedback
+- destructive-action confirmation
+
+UX
+
+Improve:
+
+- empty states
+- loading states
+- error states
+- responsive layouts
+- mobile usability
+- accessibility
+- keyboard navigation
+- consistent spacing/typography
+- charts where already appropriate
+
+Do not over-design the application.
+
+Keep the interface focused on academic administration.
+
+API Client
+
+Centralize authentication/error/rate-limit behavior in the existing API layer rather than duplicating logic throughout pages.
+
+Do not expose AI API keys to the frontend.
+
+---
+
+PHASE 6 — FRONTEND TESTING & REGRESSION
+
+Add or improve frontend tests for critical existing workflows.
+
+Prioritize:
+
+- login/logout
+- protected routes
+- role-based access
+- upload workflow
+- AI review display
+- result entry
+- approval workflow
+- GPA display
+- API error handling
+- 401/403/429 behavior
+
+Do not attempt exhaustive testing of every visual detail.
+
+Focus on business-critical behavior.
+
+Run:
+
+- frontend tests
+- backend tests
+- backend TypeScript compilation
+- frontend production build
+
+Fix regressions.
+
+---
+
+PHASE 7 — FULL SYSTEM REGRESSION
+
+Perform a complete end-to-end code audit.
+
+Trace:
+
+Authentication
+
+"login → cookie → protected request → authorization → logout"
+
+Academic data
+
+"student → course → result → GPA → CGPA"
+
+AI upload
+
+"file → parser → AI extraction → schema validation → deterministic validation → confidence/anomaly → review"
+
+Approval
+
+"review → lecturer/exam officer/HOD/dean approval → publication"
+
+Reporting
+
+"published results → GPA/CGPA → transcript/report"
+
+Look specifically for:
+
+- IDOR
+- missing authorization
+- stale assumptions
+- race conditions
+- duplicate processing
+- transaction problems
+- N+1 queries
+- memory problems
+- inconsistent status handling
+- incorrect audit metadata
+- provider-specific assumptions
+- frontend/backend contract mismatches
+
+Do not add features.
+
+Fix only real problems discovered.
+
+---
+
+PHASE 8 — FINAL SECURITY & PRODUCTION AUDIT
+
+Perform a final audit of:
+
+Security
+
+- authentication
+- authorization
+- cookies
+- CSRF
+- JWT handling
+- password policy
+- rate limiting
+- upload security
+- API security
+- secrets
+- logging
+- IDOR
+- SQL/ORM safety
+- error leakage
+- AI security
+
+Data integrity
+
+- transactions
+- deterministic GPA
+- approval workflow
+- publication
+- duplicate prevention
+- concurrency
+
+AI reliability
+
+- provider routing
+- OpenRouter/Gemma
+- Gemini fallback
+- Groq fallback
+- timeout
+- retry
+- 429 handling
+- malformed AI output
+- schema validation
+- confidence
+- anomaly detection
+- auditability
+- vision extraction
+
+Performance
+
+- database queries
+- N+1
+- upload memory usage
+- AI concurrency
+- retries
+- timeouts
+- duplicate jobs
+
+Frontend
+
+- authentication
+- authorization
+- API errors
+- loading/empty/error states
+- accessibility
+- responsive behavior
+- production build
+
+---
+
+PHASE 9 — FINAL DOCUMENTATION
+
+Update the project documentation to accurately describe the implementation.
+
+Create/update:
+
+"README.md"
+
+and the relevant documentation under:
+
+"docs/"
+
+Document:
+
+- architecture
+- setup
+- environment variables
+- authentication
+- roles
+- academic workflow
+- AI pipeline
+- OpenRouter/Gemma configuration
+- fallback providers
+- upload workflow
+- approval workflow
+- testing
+- production deployment considerations
+- security considerations
+- known limitations
+
+Do NOT document features that do not actually exist.
+
+---
+
+PHASE 10 — FINAL SCORECARD
+
+Create:
+
+"docs/ACADMIND_FINAL_AUDIT.md"
+
+Include:
+
+Architecture
+
+Security
+
+Authentication
+
+Authorization
+
+Data integrity
+
+AI pipeline
+
+AI reliability
+
+Upload performance
+
+Database performance
+
+Backend quality
+
+Frontend quality
+
+Testing
+
+Observability
+
+Documentation
+
+Production readiness
+
+Give each category a score and calculate an overall score out of 100.
+
+Compare against the original audit baseline of 42/100.
+
+Clearly list:
+
+- Critical issues
+- High issues
+- Medium issues
+- Low issues
+- Remaining technical debt
+- Deferred features
+
+The final audit must distinguish between:
+
+implemented, partially implemented, not implemented, and intentionally deferred.
+
+---
+
+STRICT SCOPE RULE
+
+Do NOT add:
+
+- attendance
+- timetable
+- assignments
+- parent portal
+- student self-service unless already implemented
+- messaging system
+- notifications system
+- payments
+- social features
+- unrelated analytics
+- microservices
+- Redis
+- Kafka
+- BullMQ
+- new infrastructure
+
+unless the existing project already contains them and they are merely being repaired.
+
+The goal is to make the existing AcadMind AI system secure, reliable, AI-first, academically trustworthy, and production-ready.
+
+---
+
+FINAL REQUIRED OUTPUT
+
+After each phase, report:
+
+1. Phase completed
+2. Files changed
+3. What was implemented
+4. Security/integrity implications
+5. Tests run
+6. Test count/result
+7. Build/type-check result
+8. Remaining concerns
+9. Commit hash
+
+At the end, provide the final audit score and final commit hash.
+
+Start with Phase 1 only. Do not begin Phase 2 until Phase 1 is verified and committed.

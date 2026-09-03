@@ -2,6 +2,7 @@
 
 import { Response } from 'express';
 import { prisma } from '../config/database.js';
+import { logger, getRequestId } from '../utils/logger.js';
 import { extractFileContent } from '../utils/file-extractor.js';
 import {
   parseStudentRows,
@@ -48,6 +49,13 @@ export async function processUpload(
   academicYear: string,
   res: Response
 ): Promise<void> {
+  const requestId = getRequestId(res.req);
+  const logCtx = { requestId, uploadType, departmentId, departmentCode, academicYear, fileName: file.originalname };
+
+  logger.info('upload started', { ...logCtx, fileSize: file.size, fileType });
+
+  const uploadStart = Date.now();
+
   // Mark any stale jobs from this user as rejected before starting a new one
   const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
   await prisma.uploadJob.updateMany({
@@ -308,6 +316,20 @@ export async function processUpload(
       },
     });
 
+    logger.info('upload completed', {
+      ...logCtx,
+      uploadJobId: job.id,
+      status: finalStatus,
+      totalResultEntries,
+      recordsExtracted: records.length,
+      anomalies: anomalies.length,
+      needsReview: needsReviewTotal,
+      aiProvider: aiAudit.provider,
+      aiFallbackUsed: aiAudit.fallbackUsed,
+      aiOperations: aiAudit.operations,
+      durationMs: Date.now() - uploadStart,
+    });
+
     sseWrite(res, 'complete', {
       jobId: job.id,
       status: finalStatus,
@@ -319,6 +341,7 @@ export async function processUpload(
       aiSummary,
     });
   } catch (error: any) {
+    logger.error('upload failed', { ...logCtx, uploadJobId: job.id, error: error.message, durationMs: Date.now() - uploadStart });
     await prisma.uploadJob.update({
       where: { id: job.id },
       data: { status: 'REJECTED', aiSummary: `Processing failed: ${error.message}` },

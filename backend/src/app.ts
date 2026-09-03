@@ -17,6 +17,7 @@ validateEnv();
 
 import routes from './routes/index.js';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware.js';
+import { csrfProtection } from './middleware/csrf.middleware.js';
 import { connectDatabase, disconnectDatabase } from './config/database.js';
 import { requestCorrelation, logger } from './utils/logger.js';
 import process from 'process';
@@ -87,8 +88,8 @@ app.use(cookieParser());
 // ROUTES
 // ======================
 
-// API routes
-app.use('/api', routes);
+// API routes — CSRF protection for cookie-authenticated state-changing requests
+app.use('/api', csrfProtection, routes);
 
 // Root endpoint
 app.get('/', (req, res) => {

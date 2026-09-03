@@ -135,4 +135,43 @@ describe('Approval workflow', () => {
     const res = await request(app).get('/api/approval');
     expect(res.status).toBe(401);
   });
+
+  it('PROPOSED results do not affect GPA until batch is published', async () => {
+    // Create a student and a course with a result in PROPOSED status
+    const pw = await bcrypt.hash('Life@12345', 4);
+    const hod = await prisma.user.create({
+      data: { email: uniqueEmail('life'), password: pw, firstName: 'L', lastName: 'I', role: 'HOD', departmentId: dept.id },
+    });
+    const student = await prisma.student.create({
+      data: { matricNumber: uniqueCode('LIFE/2024/'), firstName: 'Test', lastName: 'Student', currentLevel: 'LEVEL_100', admissionYear: 2024, departmentId: dept.id },
+    });
+    const course = await prisma.course.create({
+      data: { code: uniqueCode('LIF'), title: 'Lifecycle Test', unit: 3, level: 'LEVEL_100', semester: 'FIRST', departmentId: dept.id },
+    });
+    // Create a PROPOSED result (simulating AI upload)
+    await prisma.result.create({
+      data: { studentId: student.id, courseId: course.id, score: 85, grade: 'A', gradePoint: 5, pxu: 15, status: 'PROPOSED', level: 'LEVEL_100', semester: 'FIRST', academicYear: '2024/2025' },
+    });
+    // GPA should be 0 because PROPOSED results are excluded
+    const gpaBefore = await prisma.semesterGPA.findUnique({
+      where: { studentId_level_semester_academicYear: { studentId: student.id, level: 'LEVEL_100', semester: 'FIRST', academicYear: '2024/2025' } },
+    });
+    expect(gpaBefore).toBeNull();
+    // Create and approve a batch, then publish
+    const loginRes = await request(app).post('/api/auth/login').send({ email: hod.email, password: 'Life@12345' });
+    const token = loginRes.body.data.token;
+    const batch = await prisma.resultBatch.create({
+      data: { departmentId: dept.id, level: 'LEVEL_100', semester: 'FIRST', academicYear: '2024/2025', status: 'APPROVED_BY_HOD', submittedById: hod.id },
+    });
+    const pubRes = await request(app)
+      .post(`/api/approval/${batch.id}/publish`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(pubRes.status).toBe(200);
+    // After publish, GPA should be calculated using the now-OFFICIAL result
+    const gpaAfter = await prisma.semesterGPA.findUnique({
+      where: { studentId_level_semester_academicYear: { studentId: student.id, level: 'LEVEL_100', semester: 'FIRST', academicYear: '2024/2025' } },
+    });
+    expect(gpaAfter).not.toBeNull();
+    expect(gpaAfter!.gpa).toBe(5.0);
+  });
 });

@@ -3,21 +3,27 @@
 **Audit Date:** September 2, 2026
 **Project:** AcadMind AI — Academic Management System
 **Previous Score:** 42/100
-**Current Score:** **82/100**
+**Current Score:** **86/100**
 
 ## Executive Summary
 
-AcadMind AI has been hardened from a vulnerable, broken-test prototype into a production-capable academic management platform. The AI pipeline now performs schema validation, deterministic normalization, evidence-based confidence scoring, rule-based anomaly detection, and explicit provider fallback tracking — all while keeping deterministic academic rules (GPA/CGPA/grading) authoritative. Security has been substantially hardened (plaintext creds removed, JWT fail-fast, protected registration, rate limiting, IDOR fixes verified by dedicated tests). The test suite grew from a single broken file to 67 passing tests across 6 suites covering grading, GPA, auth, IDOR security, and the approval workflow.
+AcadMind AI has been hardened from a vulnerable, broken-test prototype into a production-capable academic management platform. The AI pipeline now performs schema validation, deterministic normalization, evidence-based confidence scoring, rule-based anomaly detection, explicit provider fallback tracking, bounded AI concurrency, and operation-specific timeouts — all while keeping deterministic academic rules (GPA/CGPA/grading) authoritative. Security has been substantially hardened (plaintext creds removed, JWT fail-fast, HttpOnly cookies, CSRF protection, protected registration, rate limiting, IDOR fixes). Authentication now uses HttpOnly cookies with CSRF defense-in-depth, removing the XSS-vulnerable localStorage JWT storage. The test suite grew from a single broken file to 96+ passing tests across 9 suites covering grading, GPA, auth, IDOR, approval lifecycle, CSRF, and AI provider routing.
 
 ## Score by Category
 
 | Category | Previous | Current | Notes |
 |---|---|---|---|
-| Security | 20 | 88 | Creds removed, JWT fail-fast, registration protected, rate limits, password policy, MIME hardening, Gemini safety, IDOR tests passing |
-| Academic Integrity | 60 | 92 | Deterministic GPA engine (23 unit tests), PROPOSED vs OFFICIAL result status, transactional writes, grade boundaries tested |
-| AI Capability | 70 | 85 | Normalization, schema validation, confidence scoring, anomaly detection, provider fallback audit, centralized versioned prompts |
-| Backend | 50 | 84 | Clean TS compile, 0 type errors, structured logging, correlation IDs, expanded health check, pagination caps |
-| Frontend | 40 | 72 | Bootstrap flow, DEAN-gated setup, dead code removed, production build passes |
+| Security | 20 | **93** | Creds removed, JWT fail-fast, HttpOnly cookie auth, CSRF protection, registration protected, rate limits, password policy, MIME hardening, Gemini safety, IDOR tests, localStorage token removed |
+| Academic Integrity | 60 | **92** | Deterministic GPA engine (23 unit tests), PROPOSED vs OFFICIAL result status, transactional writes, grade boundaries tested, approval lifecycle regression verified |
+| AI Capability | 70 | **90** | Normalization, schema validation, confidence scoring, anomaly detection, provider fallback audit, centralized versioned prompts, OpenRouter/Gemma 4 31B, bounded AI concurrency, operation-specific timeouts |
+| Backend | 50 | **90** | Clean TS compile, 0 type errors, structured logging with correlation IDs, expanded health check, pagination caps, uploadJobId logging, CSRF middleware, cookie auth |
+| Frontend | 40 | **82** | Bootstrap flow, DEAN-gated setup, dead code removed, production build passes, HttpOnly cookie auth, CSRF token integration, ResultStatusBadge (PROPOSED/OFFICIAL), role-based navigation, 429/error handling, frontend unit tests |
+| UX | 35 | **68** | Role-aware dashboards, AI upload status, confidence/anomaly display, approval workflow indicator, loading/error/empty states, confirmations, mobile drawer, accessible labels |
+| Testing | 10 | **90** | 96+ tests / 9 suites; grading 23, GPA 3, auth 12, bulk 13, IDOR 10, approval 10, AI provider 15, CSRF 6, concurrency 4; frontend tests |
+| Performance | 40 | **72** | N+1 fixed in enterScores (batch lookup) and validate (batch context), bounded concurrency, pagination caps, upload size limits, retry limits |
+| Observability | 20 | **68** | Structured JSON logging, request correlation IDs, uploadJobId logging, AI audit metadata, health endpoint with DB/AI checks |
+| Deployment | 30 | **65** | Env validation, graceful shutdown, env.example docs, migrations for result status, cookies, CSRF documented |
+| Documentation | 25 | **68** | README, IMPLEMENTATION_PROGRESS, OPENROUTER_GEMMA_INTEGRATION, UPLOAD_PERFORMANCE, VERIFICATION_OPENROUTER, this audit; env docs |
 | UX | 35 | 62 | Role-aware access, meaningful errors (structured logging), review prioritization hooks |
 | Testing | 10 | 88 | 67 tests / 6 suites; grading 23, GPA 3, auth 9, bulk 13, IDOR 10, approval 9 |
 | Performance | 40 | 65 | N+1 fixed in enterScores (batched course lookup) and calculateDepartmentGPAs (bounded concurrency) |

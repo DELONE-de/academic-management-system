@@ -4,6 +4,7 @@
 // cached in localStorage for hydration on page reload.
 
 const USER_KEY = 'user';
+const CSRF_COOKIE = 'csrf-token';
 
 export function getStoredUser<T>(): T | null {
   if (typeof window === 'undefined') return null;
@@ -30,5 +31,21 @@ export function clearSession(): void {
     localStorage.removeItem(USER_KEY);
   } catch {
     // storage unavailable — ignore
+  }
+}
+
+/**
+ * Reads the non-HttpOnly CSRF cookie so the client can echo it back in the
+ * X-CSRF-Token header on state-changing requests.
+ */
+export function getCsrfToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const match = document.cookie
+      .split('; ')
+      .find((row) => row.startsWith(`${CSRF_COOKIE}=`));
+    return match ? decodeURIComponent(match.split('=')[1]) : null;
+  } catch {
+    return null;
   }
 }

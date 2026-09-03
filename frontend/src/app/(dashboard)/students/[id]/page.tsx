@@ -3,12 +3,14 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { studentsApi, gpaApi, resultsApi } from '@/lib/api';
+import { ResultStatusBadge } from '@/components/ui/ResultStatusBadge';
 
 export default function StudentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [student, setStudent] = useState<any>(null);
   const [history, setHistory] = useState<any>(null);
+  const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -16,10 +18,12 @@ export default function StudentDetailPage() {
     Promise.all([
       studentsApi.getById(id),
       gpaApi.getStudentGPAHistory(id),
-    ]).then(([s, g]) => {
+      resultsApi.getStudentResults(id),
+    ]).then(([s, g, r]) => {
       if (s.data) setStudent(s.data);
       if (s.error) setError(s.error);
       if (g.data) setHistory(g.data);
+      if (r.data) setResults(r.data);
     }).catch(() => setError('Failed to load student details'))
       .finally(() => setLoading(false));
   }, [id]);
@@ -47,7 +51,7 @@ export default function StudentDetailPage() {
       </div>
 
       {history?.semesterGpas?.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
           <div className="px-4 py-3 border-b border-gray-200 font-semibold text-gray-900">Semester GPA History</div>
           <table className="min-w-full divide-y divide-gray-100 text-sm">
             <thead className="bg-gray-50">
@@ -70,6 +74,41 @@ export default function StudentDetailPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {results.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
+          <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+            <span className="font-semibold text-gray-900">Course Results</span>
+            <span className="text-xs text-gray-500">Official results count toward GPA</span>
+          </div>
+          <table className="min-w-full divide-y divide-gray-100 text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                {['Course', 'Title', 'Score', 'Grade', 'Status'].map(h => (
+                  <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {results.map((r: any) => (
+                <tr key={r.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-2 font-medium">{r.course?.code}</td>
+                  <td className="px-4 py-2">{r.course?.title}</td>
+                  <td className="px-4 py-2">{r.score}</td>
+                  <td className="px-4 py-2">{r.grade}</td>
+                  <td className="px-4 py-2"><ResultStatusBadge status={r.status} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {results.length === 0 && (
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center text-gray-500 text-sm">
+          No academic results are available yet.
         </div>
       )}
     </div>

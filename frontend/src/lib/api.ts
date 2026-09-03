@@ -4,7 +4,7 @@
 // backend; axios sends it automatically with `withCredentials`.
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
-import { clearSession } from './session';
+import { clearSession, getCsrfToken } from './session';
 import { friendlyMessage } from './errors';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
@@ -15,6 +15,15 @@ const api: AxiosInstance = axios.create({
   timeout: 60000,
   // Send the HttpOnly auth cookie on same-origin / configured-origin requests.
   withCredentials: true,
+});
+
+// Attach the CSRF token header to state-changing requests
+api.interceptors.request.use((config) => {
+  if (config.method && ['post', 'put', 'patch', 'delete'].includes(config.method.toLowerCase())) {
+    const csrf = getCsrfToken();
+    if (csrf) config.headers['X-CSRF-Token'] = csrf;
+  }
+  return config;
 });
 
 // Centralized response handling — never expose raw exceptions
@@ -188,10 +197,12 @@ export const uploadApi = {
     formData.append('academicYear', academicYear);
     if (departmentId) formData.append('departmentId', departmentId);
 
+    const csrf = getCsrfToken();
     const response = await fetch(`${API_URL}/upload`, {
       method: 'POST',
       // Send the HttpOnly auth cookie on cross-origin requests
       credentials: 'include',
+      headers: csrf ? { 'X-CSRF-Token': csrf } : {},
       body: formData,
     });
 
