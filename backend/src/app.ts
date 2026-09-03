@@ -26,6 +26,14 @@ import process from 'process';
 const app: Application = express();
 
 // ======================
+// TRUST PROXY
+// ======================
+// Render sits behind a reverse proxy and sets X-Forwarded-For. Without this,
+// express-rate-limit sees the proxy's IP instead of the client's, which causes
+// ERR_ERL_UNEXPECTED_X_FORWARDED_FOR from rate-limit and misidentifies clients.
+app.set('trust proxy', 1);
+
+// ======================
 // GLOBAL RATE LIMITING
 // ======================
 
@@ -51,23 +59,25 @@ app.use(requestCorrelation);
 
 // CORS configuration
 const allowedOrigins = process.env.FRONTEND_URL
-  ? process.env.FRONTEND_URL.split(',')
+  ? process.env.FRONTEND_URL.split(',').map((o) => o.trim()).filter(Boolean)
   : ['http://localhost:3000'];
 
 app.use(
   cors({
     origin: (origin, callback) => {
+      // Allow requests with no Origin (e.g. same-origin / curl)
       if (!origin) return callback(null, true);
       const isAllowed =
-        allowedOrigins.some((o) => origin.startsWith(o.trim())) ||
+        allowedOrigins.includes(origin) ||
         /\.vercel\.app$/.test(origin) ||
+        /\.onrender\.com$/.test(origin) ||
         origin === 'http://localhost:3000';
       if (isAllowed) return callback(null, true);
       callback(new Error(`CORS: origin ${origin} not allowed`));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
   })
 );
 

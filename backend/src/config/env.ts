@@ -39,7 +39,23 @@ export function validateEnv(): void {
     console.error(`Invalid AI_PROVIDER "${aiProvider}". Must be one of: openrouter, gemini, groq`);
     process.exit(1);
   }
+
+  // Warn when the user has configured a provider but is missing its key.
+  // Missing keys cause silent "not_configured" failures deep in the pipeline.
   if (aiProvider === 'openrouter' && !process.env.OPENROUTER_API_KEY) {
-    console.warn('Warning: AI_PROVIDER is set to "openrouter" but OPENROUTER_API_KEY is not set. AI features will not work.');
+    console.warn('⚠️  AI_PROVIDER=openrouter but OPENROUTER_API_KEY is not set. AI extraction/explanation will fail.');
+  }
+  if (aiProvider === 'gemini' && !process.env.GEMINI_API_KEY) {
+    console.warn('⚠️  AI_PROVIDER=gemini but GEMINI_API_KEY is not set. AI extraction/explanation will fail.');
+  }
+  if (aiProvider === 'groq' && !process.env.GROQ_API_KEY) {
+    console.warn('⚠️  AI_PROVIDER=groq but GROQ_API_KEY is not set. AI extraction/explanation will fail.');
+  }
+  // Warn if fallback providers are referenced but not configured (silent skip at runtime).
+  if (aiProvider !== 'gemini' && process.env.GEMINI_API_KEY) {
+    console.log('ℹ️  Gemini API key present — will be used as AI fallback provider.');
+  }
+  if (aiProvider !== 'groq' && process.env.GROQ_API_KEY) {
+    console.log('ℹ️  Groq API key present — will be used as AI fallback provider.');
   }
 }

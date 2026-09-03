@@ -2,6 +2,31 @@
 
 import { PrismaClient } from '@prisma/client';
 
+// Detect whether the runtime connection goes through a PgBouncer transaction
+// pooler (Supabase port 6543). Prisma must use `?pgbouncer=true` so it does not
+// rely on named prepared statements, which the transaction pooler does not support
+// (this is the root cause of `prepared statement "s4" does not exist`).
+const DATABASE_URL = process.env.DATABASE_URL || '';
+
+function warnPoolerConfig(): void {
+  const isSupabasePooler = /:\/\/[^@]+@[^:]+:6543\//.test(DATABASE_URL);
+  const hasPgbouncerFlag = /pgbouncer=true/.test(DATABASE_URL);
+
+  if (isSupabasePooler && !hasPgbouncerFlag) {
+    console.error(
+      '❌ DATABASE_URL points to the Supabase transaction pooler (port 6543) but is missing `?pgbouncer=true`.\n' +
+      '   Prisma will use named prepared statements, which the transaction pooler does not support,\n' +
+      '   causing intermittent `prepared statement ... does not exist` errors.\n' +
+      '   Add `?pgbouncer=true&connection_limit=1` to DATABASE_URL.'
+    );
+    if (process.env.NODE_ENV === 'production') process.exit(1);
+  } else if (hasPgbouncerFlag) {
+    console.log('ℹ️  PgBouncer mode detected — prepared statements disabled (pgbouncer=true)');
+  }
+}
+
+warnPoolerConfig();
+
 // Singleton pattern for Prisma Client
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;

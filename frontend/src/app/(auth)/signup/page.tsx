@@ -16,6 +16,7 @@ export default function BootstrapPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [bootstrapped, setBootstrapped] = useState<boolean | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
   const [faculties, setFaculties] = useState<any[]>([]);
 
   useEffect(() => {
@@ -27,8 +28,11 @@ export default function BootstrapPage() {
         router.push('/login');
       }
     }).catch(() => {
-      setBootstrapped(true);
-      router.push('/login');
+      // Do NOT assume "already bootstrapped" on a failure. A failed check (e.g. a
+      // 500 from a database outage) should surface an error so the user can retry,
+      // not silently redirect to login.
+      setStatusError('Could not check system status. Please try again.');
+      setBootstrapped(false);
     });
 
     // Fetch faculties for bootstrap form
@@ -75,7 +79,7 @@ export default function BootstrapPage() {
     }
   };
 
-  if (bootstrapped === null) {
+  if (bootstrapped === null && !statusError) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
@@ -99,34 +103,48 @@ export default function BootstrapPage() {
             </p>
           </div>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <Input label="First Name" error={errors.firstName?.message} {...register('firstName')} required />
-              <Input label="Last Name" error={errors.lastName?.message} {...register('lastName')} required />
-            </div>
-
-            <Input label="Email Address" type="email" error={errors.email?.message} {...register('email')} required />
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Faculty</label>
-              <select
-                {...register('facultyId')}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          {statusError && (
+            <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-800" role="alert">
+              <p className="font-medium">{statusError}</p>
+              <button
+                onClick={() => { setStatusError(null); window.location.reload(); }}
+                className="mt-2 text-red-700 hover:underline font-medium"
               >
-                <option value="">Select Faculty</option>
-                {faculties.map((f: any) => (
-                  <option key={f.id} value={f.id}>{f.name} ({f.code})</option>
-                ))}
-              </select>
-              {errors.facultyId && <p className="text-red-500 text-xs mt-1">{errors.facultyId.message}</p>}
+                Retry
+              </button>
             </div>
+          )}
 
-            <Input label="Password" type="password" error={errors.password?.message} {...register('password')} required />
+          {!statusError && (
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <Input label="First Name" error={errors.firstName?.message} {...register('firstName')} required />
+                <Input label="Last Name" error={errors.lastName?.message} {...register('lastName')} required />
+              </div>
 
-            <Button type="submit" className="w-full" size="lg" isLoading={isLoading}>
-              Create Administrator
-            </Button>
-          </form>
+              <Input label="Email Address" type="email" error={errors.email?.message} {...register('email')} required />
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Faculty</label>
+                <select
+                  {...register('facultyId')}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">Select Faculty</option>
+                  {faculties.map((f: any) => (
+                    <option key={f.id} value={f.id}>{f.name} ({f.code})</option>
+                  ))}
+                </select>
+                {errors.facultyId && <p className="text-red-500 text-xs mt-1">{errors.facultyId.message}</p>}
+              </div>
+
+              <Input label="Password" type="password" error={errors.password?.message} {...register('password')} required />
+
+              <Button type="submit" className="w-full" size="lg" isLoading={isLoading}>
+                Create Administrator
+              </Button>
+            </form>
+          )}
 
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600">
