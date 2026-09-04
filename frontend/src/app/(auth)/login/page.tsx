@@ -4,6 +4,7 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -141,9 +142,9 @@ function LoginFormInner() {
           <div className="mt-6 text-center space-y-2">
             <p className="text-sm text-gray-600">
               First time?{' '}
-              <a href="/signup" className="text-primary-600 hover:text-primary-700 font-medium">
+              <Link href="/signup" className="text-primary-600 hover:text-primary-700 font-medium">
                 Initialize system
-              </a>
+              </Link>
             </p>
           </div>
         </div>
